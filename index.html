@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
-<title>Hidrantes - Araranguá/SC | CBMSC</title>
+<title>Hidrantes - CBMSC</title>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 <style>
   :root{
@@ -30,6 +30,7 @@
     gap:10px;
     box-shadow:0 2px 6px rgba(0,0,0,.25);
     z-index:1000;
+    flex-wrap:wrap;
   }
   header .logo{
     width:38px;height:38px;border-radius:50%;
@@ -49,6 +50,7 @@
     display:flex;align-items:center;gap:4px;white-space:nowrap;
   }
   header button:active{transform:scale(.97);}
+  header button:disabled{opacity:.5;cursor:default;}
 
   #main{flex:1;position:relative;display:flex;overflow:hidden;}
   #map{flex:1;height:100%;}
@@ -63,8 +65,14 @@
   }
   #panel h2{
     font-size:13px;text-transform:uppercase;letter-spacing:.04em;
-    color:var(--muted);margin:0;padding:10px 12px 6px;
-    border-bottom:1px solid #eee;
+    color:var(--muted);margin:0;padding:10px 12px 4px;
+  }
+  #filters{
+    display:flex;gap:6px;padding:6px 12px 10px;border-bottom:1px solid #eee;flex-wrap:wrap;
+  }
+  #filters select{
+    flex:1;min-width:110px;font-size:12px;padding:5px 6px;border:1px solid #ccc;border-radius:6px;
+    background:#fff;color:var(--text);
   }
   #list{overflow-y:auto;flex:1;}
   .hcard{
@@ -85,10 +93,14 @@
   .dist-badge{
     font-size:11px;font-weight:700;background:#eee;color:#333;padding:2px 6px;border-radius:10px;
   }
+  .city-badge{
+    font-size:10.5px;font-weight:600;background:#eaf1fb;color:#1a4c8f;padding:2px 6px;border-radius:10px;
+  }
   .state-dot{width:9px;height:9px;border-radius:50%;flex-shrink:0;}
   .state-ok{background:var(--green);}
   .state-warn{background:var(--amber);}
   .state-bad{background:var(--red);}
+  .empty-msg{padding:20px 14px;font-size:13px;color:var(--muted);text-align:center;}
 
   #banner{
     padding:8px 12px;font-size:12px;background:#fff8e1;color:#7a5b00;
@@ -116,17 +128,10 @@
     100%{box-shadow:0 0 0 0 rgba(26,115,232,0);}
   }
 
-  #toggleList{
-    display:none;
-    position:absolute;top:10px;right:10px;z-index:950;
-    background:#fff;border:none;border-radius:6px;padding:8px 10px;
-    box-shadow:0 2px 8px rgba(0,0,0,.25);font-size:13px;font-weight:600;cursor:pointer;
-  }
-
   @media (max-width:760px){
     #main{flex-direction:column;}
     #panel{
-      width:100%;max-width:100%;max-height:42vh;order:2;
+      width:100%;max-width:100%;max-height:45vh;order:2;
       border-left:none;border-top:1px solid #ddd;
     }
     #map{order:1;}
@@ -140,12 +145,12 @@
   <header>
     <div class="logo">🚒</div>
     <div>
-      <h1>Hidrantes — Araranguá/SC</h1>
-      <p>Corpo de Bombeiros Militar de SC · 19º BBM</p>
+      <h1>Hidrantes — CBMSC</h1>
+      <p id="subtitle">Corpo de Bombeiros Militar de SC · 19º BBM</p>
     </div>
-    <div class="status" id="statusBox">Localizando você…</div>
-    <button id="locateBtn">📍 Minha localização</button>
-    <button id="pickBtn">📌 Marcar no mapa</button>
+    <div class="status" id="statusBox">Carregando dados…</div>
+    <button id="locateBtn" disabled>📍 Minha localização</button>
+    <button id="pickBtn" disabled>📌 Marcar no mapa</button>
   </header>
 
   <div id="banner"></div>
@@ -153,134 +158,73 @@
   <div id="main">
     <div id="map"></div>
     <div id="panel">
-      <h2 id="panelTitle">Hidrantes mais próximos</h2>
-      <div id="list"></div>
+      <h2 id="panelTitle">Hidrantes</h2>
+      <div id="filters">
+        <select id="cidadeFilter"><option value="">Todas as cidades</option></select>
+        <select id="bairroFilter"><option value="">Todos os bairros</option></select>
+      </div>
+      <div id="list"><div class="empty-msg">Carregando hidrantes…</div></div>
     </div>
   </div>
 </div>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
-/* ---------- Dados dos hidrantes (planilha CBMSC / vistoria) ---------- */
-const HIDRANTES = [
-  {
-    endereco: "Rua Caetano Lumertz, Centro",
-    lat: -28.934083, lng: -49.483444,
-    referencia: "Frente ao Giassi do Centro",
-    estado: "Hidrante funcionando e em boas condições.",
-    vazao: "Aguardando teste Gu",
-    alteracoes: "Necessário identificá-lo (está ao lado do hidrante de recalque do Supermercado Giassi). Pintar meio-fio e tampa de amarelo.",
-    link: "https://tinyurl.com/37excfy8"
-  },
-  {
-    endereco: "Rua Dona Caridade, próx. esquina Deputado Ghizzo, Centro",
-    lat: -28.931639, lng: -49.485417,
-    referencia: "Fundos do Edifício Vittá e Hospital Bom Pastor",
-    estado: "Hidrante NÃO funciona — necessário trocar o adaptador Storz amassado.",
-    vazao: "Necessita providência",
-    alteracoes: "Manutenção da calçada; troca do adaptador Storz; pintar meio-fio e tampa de amarelo.",
-    link: "https://tinyurl.com/3tw6jpyr"
-  },
-  {
-    endereco: "Rod. Gov. Jorge Lacerda, esq. Sete de Setembro, Alto Feliz",
-    lat: -28.943278, lng: -49.493111,
-    referencia: "Posto Rizotto, na antiga sinaleira",
-    estado: "Hidrante funcionando; caixa do hidrante necessita de reparo.",
-    vazao: "Aguardando teste Gu",
-    alteracoes: "Conserto da calçada ao redor da caixa e da própria caixa do hidrante.",
-    link: "https://tinyurl.com/58x6teva"
-  },
-  {
-    endereco: "Rod. Gov. Jorge Lacerda, Alto Feliz",
-    lat: -28.949389, lng: -49.486056,
-    referencia: "Quartel dos Bombeiros",
-    estado: "Sem alterações — hidrante em ordem.",
-    vazao: "Aguardando teste Gu",
-    alteracoes: "Sem alterações.",
-    link: "https://tinyurl.com/39smznbz"
-  },
-  {
-    endereco: "Rua Maestro Serafim Silva, próx. Caetano Lumertz, Coloninha",
-    lat: -28.939028, lng: -49.476444,
-    referencia: "Esquina da Clínica Mão Estética com Caetano Lumertz",
-    estado: "Hidrante funcionando e em boas condições.",
-    vazao: "Aguardando teste Gu",
-    alteracoes: "Pintar meio-fio e tampa de amarelo.",
-    link: "https://tinyurl.com/2yshe5sb"
-  },
-  {
-    endereco: "BR-101 (Marginal), Sanga da Areia",
-    lat: -28.996278, lng: -49.554,
-    referencia: "Pátio do posto de combustível, próx. à passarela de pedestres (canto esquerdo)",
-    estado: "Hidrante funcionando e em boas condições.",
-    vazao: "Aguardando teste Gu",
-    alteracoes: "Pintar meio-fio e tampa de amarelo.",
-    link: "https://tinyurl.com/4zmmezxt"
-  },
-  {
-    endereco: "Av. Padre Antônio Luiz Dias, próx. esq. Getúlio Vargas, Centro",
-    lat: -28.933556, lng: -49.485889,
-    referencia: "Academia R10 e Talismã Calçados",
-    estado: "Hidrante funcionando e em boas condições.",
-    vazao: "Aguardando teste Gu",
-    alteracoes: "Pintar meio-fio e tampa de amarelo.",
-    link: "https://tinyurl.com/3mumu8pa"
-  },
-  {
-    endereco: "Rua Prefeito Walter Belizone, esq. Ruy Stocler de Souza, Urussanguinha",
-    lat: -28.944444, lng: -49.485917,
-    referencia: "ETA III - SAMAE",
-    estado: "Hidrante funcionando; necessita troca da manopla do registro.",
-    vazao: "Aguardando teste Gu",
-    alteracoes: "Trocar manopla do registro; corrigir altura do hidrante; pintar tampa de amarelo.",
-    link: "https://tinyurl.com/2ab5auvx"
-  },
-  {
-    endereco: "Rua Prof. Silva Soares, próx. esq. Celso Ramos, Coloninha",
-    lat: -28.934194, lng: -49.473417,
-    referencia: "Frente à Andiara Móveis",
-    estado: "Hidrante funcionando e em boas condições.",
-    vazao: "Aguardando teste Gu",
-    alteracoes: "Pintar meio-fio e tampa de amarelo.",
-    link: "https://tinyurl.com/y8ajczxe"
-  },
-  {
-    endereco: "Rua Thiago Dias Lúcio",
-    lat: -28.970611, lng: -49.538778,
-    referencia: "Polícia Rodoviária — frente ABF Galvanização, Parque Industrial",
-    estado: "Hidrante funcionando e em boas condições.",
-    vazao: "Aguardando teste Gu",
-    alteracoes: "Pintar meio-fio e tampa de amarelo.",
-    link: "https://tinyurl.com/bddh2bht"
-  },
-  {
-    endereco: "Rua Virgulino de Queiroz, próx. esq. Rui Barbosa, Centro",
-    lat: -28.935722, lng: -49.487389,
-    referencia: "Frente Estofaria do Paulista e Stylo Móveis",
-    estado: "Hidrante NÃO funciona — registro emperrado.",
-    vazao: "Necessita providência",
-    alteracoes: "Manutenção do registro emperrado; pintar meio-fio e tampa de amarelo.",
-    link: "https://tinyurl.com/39t29z69"
-  },
-  {
-    endereco: "Av. XV de Novembro, próx. esq. Engenheiro Mesquita, Centro",
-    lat: -28.933444, lng: -49.480556,
-    referencia: "Frente Dental Mix e próx. a Workshopp",
-    estado: "Hidrante NÃO funciona — registro emperrado.",
-    vazao: "Necessita providência",
-    alteracoes: "Manutenção do registro emperrado; pintar meio-fio e tampa de amarelo.",
-    link: "https://tinyurl.com/5692eetb"
-  },
-  {
-    endereco: "Rua Euclides Odorico do Canto, próx. Rod. Valdomiro Manoel, Morro dos Conventos",
-    lat: -28.941583, lng: -49.378611,
-    referencia: "Próximo à Eskimo Sorvetes",
-    estado: "Hidrante NÃO funciona — manopla do registro quebrada.",
-    vazao: "Necessita providência",
-    alteracoes: "Reparar caixa danificada; trocar manopla; realocar ao nível da calçada; pintar meio-fio e tampa.",
-    link: "https://tinyurl.com/wa7esnjf"
+/* =======================================================================
+   Fonte de dados: hidrantes.csv (mesmo repositório).
+   Para atualizar os hidrantes, edite hidrantes.csv direto pelo GitHub
+   (botão "Edit" no arquivo) e faça commit — a página busca a versão mais
+   recente automaticamente a cada carregamento.
+   ======================================================================= */
+const CSV_URL = './hidrantes.csv';
+
+/* ---------- Parser de CSV (suporta campos entre aspas com vírgulas) ---------- */
+function parseCSV(text) {
+  const rows = [];
+  let row = [], field = '', inQuotes = false;
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (inQuotes) {
+      if (c === '"') {
+        if (text[i + 1] === '"') { field += '"'; i++; }
+        else inQuotes = false;
+      } else field += c;
+    } else {
+      if (c === '"') inQuotes = true;
+      else if (c === ',') { row.push(field); field = ''; }
+      else if (c === '\r') { /* skip */ }
+      else if (c === '\n') { row.push(field); field = ''; rows.push(row); row = []; }
+      else field += c;
+    }
   }
-];
+  if (field.length || row.length) { row.push(field); rows.push(row); }
+  return rows;
+}
+
+function csvToHydrants(text) {
+  const rows = parseCSV(text).filter(r => r.some(c => c && c.trim() !== ''));
+  const header = rows[0].map(h => h.trim().toLowerCase());
+  const idx = name => header.indexOf(name);
+  const out = [];
+  for (let i = 1; i < rows.length; i++) {
+    const r = rows[i];
+    const lat = parseFloat(r[idx('lat')]);
+    const lng = parseFloat(r[idx('lng')]);
+    if (isNaN(lat) || isNaN(lng)) continue;
+    out.push({
+      cidade: (r[idx('cidade')] || '').trim(),
+      bairro: (r[idx('bairro')] || '').trim(),
+      endereco: (r[idx('endereco')] || '').trim(),
+      lat, lng,
+      referencia: (r[idx('referencia')] || '').trim(),
+      estado: (r[idx('estado')] || '').trim(),
+      vazao: (r[idx('vazao')] || '').trim(),
+      alteracoes: (r[idx('alteracoes')] || '').trim(),
+      link: (r[idx('link')] || '').trim()
+    });
+  }
+  return out;
+}
 
 /* ---------- Utilidades ---------- */
 function haversine(lat1, lon1, lat2, lon2){
@@ -302,7 +246,7 @@ function stateClass(estado){
 }
 
 /* ---------- Mapa ---------- */
-const map = L.map('map', { zoomControl: true }).setView([-28.9357, -49.4864], 13);
+const map = L.map('map', { zoomControl: true }).setView([-28.9357, -49.4864], 12);
 L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
   maxZoom: 20,
   subdomains: 'abcd',
@@ -319,49 +263,78 @@ const hydrantIcon = (cls) => L.divIcon({
   iconAnchor: [13,26],
   popupAnchor: [0,-24]
 });
-
 const userIcon = L.divIcon({ className:'', html:'<div class="user-dot"></div>', iconSize:[16,16], iconAnchor:[8,8] });
 
+let HIDRANTES = [];
 let userMarker = null;
 let userLatLng = null;
-const hydrantMarkers = [];
+let pickMode = false;
+let filterCidade = '';
+let filterBairro = '';
 
-HIDRANTES.forEach((h, i) => {
-  const cls = stateClass(h.estado);
-  const marker = L.marker([h.lat, h.lng], { icon: hydrantIcon(cls) }).addTo(map);
-  marker.bindPopup(`
-    <b>${h.endereco}</b><br>
-    <span class="popup-badge ${cls}">${cls==='bad'?'Não funcionando':cls==='warn'?'Necessita reparo':'Em boas condições'}</span><br>
-    <b>Referência:</b> ${h.referencia}<br>
-    <b>Situação:</b> ${h.estado}<br>
-    ${h.link ? `<a class="popup-link" href="${h.link}" target="_blank" rel="noopener">Abrir no Google Maps ↗</a>` : ''}
-  `);
-  h._marker = marker;
-  hydrantMarkers.push(marker);
-});
-
-/* ---------- Lista lateral ---------- */
 const listEl = document.getElementById('list');
 const panelTitle = document.getElementById('panelTitle');
 const statusBox = document.getElementById('statusBox');
 const banner = document.getElementById('banner');
+const cidadeSel = document.getElementById('cidadeFilter');
+const bairroSel = document.getElementById('bairroFilter');
+const locateBtn = document.getElementById('locateBtn');
+const pickBtn = document.getElementById('pickBtn');
+
+function filteredHydrants(){
+  return HIDRANTES.filter(h =>
+    (!filterCidade || h.cidade === filterCidade) &&
+    (!filterBairro || h.bairro === filterBairro)
+  );
+}
+
+function populateFilters(){
+  const cidades = [...new Set(HIDRANTES.map(h => h.cidade).filter(Boolean))].sort();
+  cidadeSel.innerHTML = '<option value="">Todas as cidades</option>' +
+    cidades.map(c => `<option value="${c}">${c}</option>`).join('');
+
+  const bairros = [...new Set(HIDRANTES.filter(h => !filterCidade || h.cidade === filterCidade)
+    .map(h => h.bairro).filter(Boolean))].sort();
+  bairroSel.innerHTML = '<option value="">Todos os bairros</option>' +
+    bairros.map(b => `<option value="${b}">${b}</option>`).join('');
+}
+
+function renderMarkers(){
+  HIDRANTES.forEach(h => { if (h._marker) map.removeLayer(h._marker); });
+  filteredHydrants().forEach(h => {
+    const cls = stateClass(h.estado);
+    const marker = L.marker([h.lat, h.lng], { icon: hydrantIcon(cls) }).addTo(map);
+    marker.bindPopup(`
+      <b>${h.endereco}</b><br>
+      <span class="popup-badge ${cls}">${cls==='bad'?'Não funcionando':cls==='warn'?'Necessita reparo':'Em boas condições'}</span><br>
+      <b>Cidade/Bairro:</b> ${h.cidade}${h.bairro ? ' — ' + h.bairro : ''}<br>
+      <b>Referência:</b> ${h.referencia}<br>
+      <b>Situação:</b> ${h.estado}<br>
+      ${h.link ? `<a class="popup-link" href="${h.link}" target="_blank" rel="noopener">Abrir no Google Maps ↗</a>` : ''}
+    `);
+    h._marker = marker;
+  });
+}
 
 function renderList(){
-  let items = HIDRANTES.map((h, i) => ({...h, idx:i}));
+  let items = filteredHydrants();
   if(userLatLng){
-    items.forEach(h => h.dist = haversine(userLatLng.lat, userLatLng.lng, h.lat, h.lng));
+    items = items.map(h => ({...h, dist: haversine(userLatLng.lat, userLatLng.lng, h.lat, h.lng)}));
     items.sort((a,b) => a.dist - b.dist);
     panelTitle.textContent = 'Hidrantes mais próximos de você';
   } else {
-    panelTitle.textContent = `Hidrantes cadastrados (${items.length})`;
+    panelTitle.textContent = `Hidrantes (${items.length})`;
   }
 
   listEl.innerHTML = '';
+  if(items.length === 0){
+    listEl.innerHTML = '<div class="empty-msg">Nenhum hidrante encontrado para este filtro.</div>';
+    return;
+  }
   items.forEach((h, rank) => {
     const cls = stateClass(h.estado);
     const card = document.createElement('div');
     card.className = 'hcard';
-    card.dataset.idx = h.idx;
     card.innerHTML = `
       <div class="rank">${rank+1}</div>
       <div class="info">
@@ -370,6 +343,7 @@ function renderList(){
         <div class="meta">
           <span class="state-dot state-${cls}"></span>
           ${h.dist !== undefined ? `<span class="dist-badge">${fmtDist(h.dist)}</span>` : ''}
+          <span class="city-badge">${h.cidade}${h.bairro ? ' · ' + h.bairro : ''}</span>
         </div>
       </div>
     `;
@@ -382,7 +356,22 @@ function renderList(){
     listEl.appendChild(card);
   });
 }
-renderList();
+
+function refreshView(){
+  renderMarkers();
+  renderList();
+}
+
+cidadeSel.addEventListener('change', () => {
+  filterCidade = cidadeSel.value;
+  filterBairro = '';
+  populateFilters();
+  refreshView();
+});
+bairroSel.addEventListener('change', () => {
+  filterBairro = bairroSel.value;
+  refreshView();
+});
 
 /* ---------- Geolocalização ---------- */
 function setUserLocation(lat, lng, label){
@@ -390,17 +379,21 @@ function setUserLocation(lat, lng, label){
   if(userMarker) map.removeLayer(userMarker);
   userMarker = L.marker([lat, lng], { icon: userIcon, zIndexOffset: 1000 })
     .addTo(map).bindPopup(label || 'Você está aqui');
-  const nearest = [...HIDRANTES].map(h => ({...h, dist: haversine(lat, lng, h.lat, h.lng)}))
-                                 .sort((a,b) => a.dist - b.dist)[0];
-  statusBox.innerHTML = `Localização definida<br>Hidrante mais próximo: <b>${fmtDist(nearest.dist)}</b>`;
-  const bounds = L.latLngBounds([[lat, lng]]);
-  HIDRANTES.slice(0).sort((a,b) => haversine(lat,lng,a.lat,a.lng) - haversine(lat,lng,b.lat,b.lng))
-    .slice(0,5).forEach(h => bounds.extend([h.lat, h.lng]));
-  map.fitBounds(bounds, { padding: [60,60], maxZoom: 16 });
+  const pool = filteredHydrants();
+  if(pool.length){
+    const nearest = pool.map(h => ({...h, dist: haversine(lat, lng, h.lat, h.lng)}))
+                         .sort((a,b) => a.dist - b.dist)[0];
+    statusBox.innerHTML = `Localização definida<br>Hidrante mais próximo: <b>${fmtDist(nearest.dist)}</b>`;
+    const bounds = L.latLngBounds([[lat, lng]]);
+    pool.slice(0).sort((a,b) => haversine(lat,lng,a.lat,a.lng) - haversine(lat,lng,b.lat,b.lng))
+      .slice(0,5).forEach(h => bounds.extend([h.lat, h.lng]));
+    map.fitBounds(bounds, { padding: [60,60], maxZoom: 16 });
+  } else {
+    statusBox.textContent = 'Localização definida';
+  }
   renderList();
 }
 
-let pickMode = false;
 function togglePickMode(on){
   pickMode = on;
   const mapEl = document.getElementById('map');
@@ -425,42 +418,58 @@ function locateUser(){
 
   if(window.isSecureContext === false){
     statusBox.textContent = 'Localização indisponível';
-    banner.innerHTML = 'O navegador só permite obter sua localização automática em páginas HTTPS (ou abertas via servidor local), não ao abrir o arquivo diretamente. ' +
-      'Use o botão <b>"📌 Marcar no mapa"</b> para indicar onde você está, ou sirva este arquivo por um servidor local/HTTPS.';
+    banner.innerHTML = 'O navegador só permite obter sua localização automática em páginas HTTPS. ' +
+      'Use o botão <b>"📌 Marcar no mapa"</b> para indicar onde você está.';
     banner.classList.add('show');
-    renderList();
     return;
   }
-
   if(!navigator.geolocation){
     statusBox.textContent = 'Geolocalização indisponível';
-    banner.textContent = 'Seu navegador não suporta geolocalização. Use "📌 Marcar no mapa" ou veja a lista completa de hidrantes abaixo.';
+    banner.textContent = 'Seu navegador não suporta geolocalização. Use "📌 Marcar no mapa" ou veja a lista abaixo.';
     banner.classList.add('show');
-    renderList();
     return;
   }
-
   navigator.geolocation.getCurrentPosition(
-    (pos) => {
-      setUserLocation(pos.coords.latitude, pos.coords.longitude, 'Você está aqui');
-    },
+    (pos) => setUserLocation(pos.coords.latitude, pos.coords.longitude, 'Você está aqui'),
     (err) => {
       statusBox.textContent = 'Localização não disponível';
       let msg = 'Não foi possível obter sua localização.';
-      if(err.code === 1) msg = 'Permissão de localização negada. Habilite-a nas configurações do navegador, ou use "📌 Marcar no mapa" para indicar sua posição manualmente.';
+      if(err.code === 1) msg = 'Permissão de localização negada. Habilite-a nas configurações do navegador, ou use "📌 Marcar no mapa".';
       else if(err.code === 2) msg = 'Posição indisponível no momento. Tente novamente ou use "📌 Marcar no mapa".';
-      else if(err.code === 3) msg = 'Tempo esgotado ao tentar obter sua localização. Tente novamente ou use "📌 Marcar no mapa".';
+      else if(err.code === 3) msg = 'Tempo esgotado. Tente novamente ou use "📌 Marcar no mapa".';
       banner.textContent = msg;
       banner.classList.add('show');
-      renderList();
     },
     { enableHighAccuracy: true, timeout: 10000, maximumAge: 30000 }
   );
 }
 
-document.getElementById('locateBtn').addEventListener('click', locateUser);
-document.getElementById('pickBtn').addEventListener('click', () => togglePickMode(true));
-locateUser();
+locateBtn.addEventListener('click', locateUser);
+pickBtn.addEventListener('click', () => togglePickMode(true));
+
+/* ---------- Carregamento dos dados (CSV do repositório) ---------- */
+async function loadData(){
+  try {
+    const res = await fetch(CSV_URL + '?t=' + Date.now(), { cache: 'no-store' });
+    if(!res.ok) throw new Error('HTTP ' + res.status);
+    const text = await res.text();
+    HIDRANTES = csvToHydrants(text);
+    if(HIDRANTES.length === 0) throw new Error('CSV vazio ou em formato inesperado');
+
+    populateFilters();
+    refreshView();
+    statusBox.textContent = `${HIDRANTES.length} hidrantes carregados`;
+    locateBtn.disabled = false;
+    pickBtn.disabled = false;
+    locateUser();
+  } catch (err) {
+    statusBox.textContent = 'Erro ao carregar dados';
+    banner.innerHTML = 'Não foi possível carregar <b>hidrantes.csv</b>. Verifique se o arquivo está publicado junto com esta página. (' + err.message + ')';
+    banner.classList.add('show');
+    listEl.innerHTML = '<div class="empty-msg">Não foi possível carregar os hidrantes.</div>';
+  }
+}
+loadData();
 </script>
 </body>
 </html>
