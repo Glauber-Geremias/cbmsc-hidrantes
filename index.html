@@ -331,11 +331,13 @@ function populateFilters(){
   const cidades = [...new Set(HIDRANTES.map(h => h.cidade).filter(Boolean))].sort();
   cidadeSel.innerHTML = '<option value="">Todas as cidades</option>' +
     cidades.map(c => `<option value="${c}">${c}</option>`).join('');
+  cidadeSel.value = filterCidade;
 
   const bairros = [...new Set(HIDRANTES.filter(h => !filterCidade || h.cidade === filterCidade)
     .map(h => h.bairro).filter(Boolean))].sort();
   bairroSel.innerHTML = '<option value="">Todos os bairros</option>' +
     bairros.map(b => `<option value="${b}">${b}</option>`).join('');
+  bairroSel.value = filterBairro;
 }
 
 function renderMarkers(){
