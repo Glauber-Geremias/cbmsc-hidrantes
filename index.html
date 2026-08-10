@@ -268,7 +268,7 @@ function fmtDist(m){
   return (m/1000).toFixed(2) + " km";
 }
 function stateClass(estado){
-  if(/não funciona/i.test(estado)) return "bad";
+  if(/não funciona|n[ãa]o funcional|inoperante|obstru[íi]d|danificad|quebrad/i.test(estado)) return "bad";
   if(/necessita|reparo|manopla|troca/i.test(estado)) return "warn";
   return "ok";
 }
