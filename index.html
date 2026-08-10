@@ -77,7 +77,15 @@
   }
   #panel h2{
     font-size:13px;text-transform:uppercase;letter-spacing:.04em;
-    color:var(--muted);margin:0;padding:10px 12px 4px;
+    color:var(--muted);margin:0;
+  }
+  #panelToggle{
+    width:100%;background:none;border:none;cursor:pointer;
+    display:flex;align-items:center;justify-content:space-between;
+    padding:10px 12px 4px;font-family:inherit;
+  }
+  #panelChevron{
+    font-size:11px;color:var(--muted);transition:transform .2s;flex-shrink:0;
   }
   #filters{
     display:flex;gap:6px;padding:6px 12px 10px;border-bottom:1px solid #eee;flex-wrap:wrap;
@@ -145,7 +153,10 @@
     #panel{
       width:100%;max-width:100%;max-height:45vh;order:2;
       border-left:none;border-top:1px solid #ddd;
+      transition:max-height .25s ease;
     }
+    #panel.collapsed{ max-height:44px; overflow:hidden; }
+    #panel.collapsed #panelChevron{ transform:rotate(180deg); }
     #map{order:1;}
     header h1{font-size:13.5px;}
     header p{font-size:10px;}
@@ -171,7 +182,10 @@
   <div id="main">
     <div id="map"></div>
     <div id="panel">
-      <h2 id="panelTitle">Hidrantes</h2>
+      <button id="panelToggle" type="button">
+        <h2 id="panelTitle">Hidrantes</h2>
+        <span id="panelChevron">▼</span>
+      </button>
       <div id="filters">
         <select id="cidadeFilter"><option value="">Todas as cidades</option></select>
         <select id="bairroFilter"><option value="">Todos os bairros</option></select>
@@ -293,6 +307,17 @@ const cidadeSel = document.getElementById('cidadeFilter');
 const bairroSel = document.getElementById('bairroFilter');
 const locateBtn = document.getElementById('locateBtn');
 const pickBtn = document.getElementById('pickBtn');
+const panelEl = document.getElementById('panel');
+const panelToggle = document.getElementById('panelToggle');
+
+/* No celular, a lista começa recolhida para não cobrir o mapa/localização;
+   o usuário expande tocando no título. No desktop o painel lateral não atrapalha. */
+if (window.matchMedia('(max-width: 760px)').matches) {
+  panelEl.classList.add('collapsed');
+}
+panelToggle.addEventListener('click', () => {
+  panelEl.classList.toggle('collapsed');
+});
 
 function filteredHydrants(){
   return HIDRANTES.filter(h =>
