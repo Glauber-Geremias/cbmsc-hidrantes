@@ -23,6 +23,7 @@
     --red-dark:#8e2c22;
     --green:#2e8b57;
     --amber:#d68910;
+    --black-state:#1c1c1c;
     --gray:#7f8c8d;
     --bg:#f4f4f4;
     --card:#ffffff;
@@ -119,7 +120,7 @@
   .state-dot{width:9px;height:9px;border-radius:50%;flex-shrink:0;}
   .state-ok{background:var(--green);}
   .state-warn{background:var(--amber);}
-  .state-bad{background:var(--red);}
+  .state-bad{background:var(--black-state);}
   .empty-msg{padding:20px 14px;font-size:13px;color:var(--muted);text-align:center;}
 
   #banner{
@@ -133,7 +134,7 @@
   .popup-badge{display:inline-block;font-size:10.5px;font-weight:700;padding:2px 6px;border-radius:8px;margin:4px 0;color:#fff;}
   .popup-badge.ok{background:var(--green);}
   .popup-badge.warn{background:var(--amber);}
-  .popup-badge.bad{background:var(--red);}
+  .popup-badge.bad{background:var(--black-state);}
   .popup-link{display:inline-block;margin-top:6px;font-size:12px;color:var(--red-dark);font-weight:600;text-decoration:none;}
 
   /* user marker pulse */
@@ -283,7 +284,7 @@ L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r
 const hydrantIcon = (cls) => L.divIcon({
   className: '',
   html: `<div style="width:26px;height:26px;border-radius:50% 50% 50% 0;transform:rotate(-45deg);
-          background:${cls==='bad' ? '#c0392b' : cls==='warn' ? '#d68910' : '#2e8b57'};
+          background:${cls==='bad' ? '#1c1c1c' : cls==='warn' ? '#d68910' : '#2e8b57'};
           border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.4);display:flex;align-items:center;justify-content:center;">
           <span style="transform:rotate(45deg);font-size:13px;">🚰</span></div>`,
   iconSize: [26,26],
