@@ -1,4 +1,4 @@
-const CACHE_NAME = 'hidrantes-cbmsc-v3';
+const CACHE_NAME = 'hidrantes-cbmsc-v4';
 const APP_SHELL = [
   './',
   './index.html',
