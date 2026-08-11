@@ -286,7 +286,15 @@ const hydrantIcon = (cls) => L.divIcon({
   html: `<div style="width:26px;height:26px;border-radius:50% 50% 50% 0;transform:rotate(-45deg);
           background:${cls==='bad' ? '#1c1c1c' : cls==='warn' ? '#d68910' : '#2e8b57'};
           border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.4);display:flex;align-items:center;justify-content:center;">
-          <span style="transform:rotate(45deg);font-size:13px;">🚰</span></div>`,
+          <svg style="transform:rotate(45deg);" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="10" y="1.2" width="4" height="1.8" rx="0.6"/>
+            <path d="M7.5 4.5c0-1.8 1.8-3 4.5-3s4.5 1.2 4.5 3v3.3h-9V4.5z"/>
+            <line x1="6" y1="7.8" x2="18" y2="7.8"/>
+            <rect x="8.2" y="9" width="7.6" height="10.2" rx="1"/>
+            <path d="M8.2 12.5H4.8a1 1 0 0 1-1-1v-.6a1 1 0 0 1 1-1H8.2"/>
+            <path d="M15.8 12.5h3.4a1 1 0 0 0 1-1v-.6a1 1 0 0 0-1-1h-3.4"/>
+            <rect x="7.2" y="19.2" width="9.6" height="2.4" rx="0.8"/>
+          </svg></div>`,
   iconSize: [26,26],
   iconAnchor: [13,26],
   popupAnchor: [0,-24]
