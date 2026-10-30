@@ -129,6 +129,58 @@
   }
   #banner.show{display:block;}
 
+  /* Instruções de instalação no iPhone */
+  #iosInstall{
+    position:fixed;left:12px;right:12px;bottom:calc(12px + env(safe-area-inset-bottom));
+    z-index:1900;background:var(--card);border-radius:10px;padding:12px 36px 12px 14px;
+    box-shadow:0 6px 24px rgba(0,0,0,.3);border-top:4px solid var(--red);
+    font-size:13px;line-height:1.45;display:none;
+  }
+  #iosInstall.show{display:block;}
+  #iosInstall ol{margin:6px 0 0;padding-left:20px;}
+  #iosInstall li{margin:3px 0;}
+  #iosInstall svg{vertical-align:-3px;color:#1a73e8;}
+  #iosInstallClose{
+    position:absolute;top:6px;right:6px;width:28px;height:28px;border:none;
+    background:none;font-size:16px;color:var(--muted);cursor:pointer;
+  }
+
+  /* Área do gestor: login e cadastro de hidrantes */
+  #modal{
+    position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:2000;
+    display:none;align-items:center;justify-content:center;padding:16px;
+  }
+  #modal.show{display:flex;}
+  .modal-card{
+    background:var(--card);border-radius:10px;width:100%;max-width:440px;max-height:92vh;
+    overflow-y:auto;padding:16px;box-shadow:0 8px 30px rgba(0,0,0,.3);
+  }
+  .modal-card h3{margin:0 0 4px;font-size:16px;color:var(--red-dark);}
+  .modal-card .hint{font-size:12px;color:var(--muted);margin:0 0 6px;}
+  .modal-card label{display:block;font-size:12px;font-weight:600;color:var(--muted);margin:10px 0 4px;}
+  .modal-card input,.modal-card select,.modal-card textarea{
+    width:100%;font-family:inherit;font-size:16px;padding:7px 8px;
+    border:1px solid #ccc;border-radius:6px;background:#fff;color:var(--text);
+  }
+  .modal-card textarea{min-height:54px;resize:vertical;}
+  .row2{display:flex;gap:8px;}
+  .row2 > div{flex:1;min-width:0;}
+  .coord-actions{display:flex;gap:6px;margin-top:6px;flex-wrap:wrap;}
+  .modal-actions{display:flex;gap:8px;margin-top:16px;flex-wrap:wrap;justify-content:flex-end;}
+  .btn{border:none;border-radius:6px;padding:9px 14px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;}
+  .btn:disabled{opacity:.5;cursor:default;}
+  .btn-primary{background:var(--red);color:#fff;}
+  .btn-secondary{background:#eee;color:#333;}
+  .btn-danger{background:#fff;color:var(--red-dark);border:1px solid var(--red);margin-right:auto;}
+  .btn-small{padding:6px 9px;font-size:12px;}
+  .form-error{display:none;margin-top:10px;font-size:12.5px;color:var(--red-dark);}
+  .form-error.show{display:block;}
+  .popup-edit{
+    margin-top:8px;background:var(--red);color:#fff;border:none;border-radius:6px;
+    padding:5px 10px;font-size:12px;font-weight:600;cursor:pointer;
+  }
+  .popup-meta{display:block;margin-top:4px;font-size:11px;color:var(--muted);}
+
   .leaflet-popup-content{font-size:12.5px;line-height:1.45;max-width:230px;}
   .leaflet-popup-content b{font-size:13.5px;}
   .popup-badge{display:inline-block;font-size:10.5px;font-weight:700;padding:2px 6px;border-radius:8px;margin:4px 0;color:#fff;}
@@ -170,11 +222,13 @@
     <div class="logo">🚒</div>
     <div>
       <h1>Hidrantes — CBMSC</h1>
-      <p id="subtitle">Corpo de Bombeiros Militar de SC · 17º BBM</p>
+      <p id="subtitle">Corpo de Bombeiros Militar de Santa Catarina</p>
     </div>
     <div class="status" id="statusBox">Carregando dados…</div>
     <button id="locateBtn" disabled>📍 Minha localização</button>
     <button id="pickBtn" disabled>📌 Marcar no mapa</button>
+    <button id="addBtn" style="display:none;">➕ Novo hidrante</button>
+    <button id="gestorBtn" style="display:none;">🔐 Gestor</button>
     <button id="installBtn" style="display:none;">⬇️ Instalar app</button>
   </header>
 
@@ -196,15 +250,98 @@
   </div>
 </div>
 
+<div id="iosInstall" role="dialog" aria-label="Instalar no iPhone">
+  <button type="button" id="iosInstallClose" aria-label="Fechar">✕</button>
+  <b>Instale o app no seu iPhone</b>
+  <ol>
+    <li>Toque em <b>Compartilhar</b>
+      <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12"/><path d="M8 7l4-4 4 4"/><path d="M6 11v9h12v-9"/></svg>
+      na barra do navegador.</li>
+    <li>Role e toque em <b>Adicionar à Tela de Início</b>.</li>
+    <li>Toque em <b>Adicionar</b>. O ícone dos Hidrantes aparece junto aos seus apps.</li>
+  </ol>
+</div>
+
+<div id="modal">
+  <!-- Login do gestor -->
+  <form class="modal-card" id="loginForm" style="display:none;">
+    <h3>Acesso do gestor</h3>
+    <p class="hint">Somente gestores cadastrados podem incluir ou editar hidrantes.</p>
+    <label for="loginEmail">E-mail</label>
+    <input id="loginEmail" type="email" autocomplete="username" required>
+    <label for="loginSenha">Senha</label>
+    <input id="loginSenha" type="password" autocomplete="current-password" required>
+    <div class="form-error" id="loginError"></div>
+    <div class="modal-actions">
+      <button type="button" class="btn btn-secondary" data-close>Cancelar</button>
+      <button type="submit" class="btn btn-primary" id="loginSubmit">Entrar</button>
+    </div>
+  </form>
+
+  <!-- Cadastro / edição de hidrante -->
+  <form class="modal-card" id="hydrantForm" style="display:none;">
+    <h3 id="formTitle">Novo hidrante</h3>
+    <p class="hint" id="formHint"></p>
+    <label for="fCidade">Cidade *</label>
+    <div id="fCidadeWrap"></div>
+    <datalist id="cidadesList"></datalist>
+    <label for="fBairro">Bairro</label>
+    <input id="fBairro">
+    <label for="fEndereco">Endereço *</label>
+    <input id="fEndereco" required>
+    <label>Coordenadas *</label>
+    <div class="row2">
+      <div><input id="fLat" inputmode="decimal" placeholder="Latitude (ex.: -28.93)" required></div>
+      <div><input id="fLng" inputmode="decimal" placeholder="Longitude (ex.: -49.48)" required></div>
+    </div>
+    <div class="coord-actions">
+      <button type="button" class="btn btn-secondary btn-small" id="fGpsBtn">📍 Usar meu GPS</button>
+      <button type="button" class="btn btn-secondary btn-small" id="fMapBtn">📌 Marcar no mapa</button>
+    </div>
+    <label for="fReferencia">Ponto de referência</label>
+    <input id="fReferencia">
+    <label for="fCondicao">Condição *</label>
+    <select id="fCondicao">
+      <option value="ok">🟢 Em boas condições</option>
+      <option value="warn">🟠 Necessita reparo</option>
+      <option value="bad">⚫ Não funcionando</option>
+    </select>
+    <label for="fEstado">Situação (descrição)</label>
+    <textarea id="fEstado"></textarea>
+    <label for="fVazao">Vazão</label>
+    <input id="fVazao">
+    <label for="fAlteracoes">Alterações / providências</label>
+    <textarea id="fAlteracoes"></textarea>
+    <label for="fLink">Link do Google Maps (opcional)</label>
+    <input id="fLink" type="url" placeholder="Gerado automaticamente se ficar em branco">
+    <div class="form-error" id="formError"></div>
+    <div class="modal-actions">
+      <button type="button" class="btn btn-danger" id="fDeleteBtn">🗑️ Excluir</button>
+      <button type="button" class="btn btn-secondary" data-close>Cancelar</button>
+      <button type="submit" class="btn btn-primary" id="fSaveBtn">Salvar</button>
+    </div>
+  </form>
+</div>
+
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
 <script>
 /* =======================================================================
-   Fonte de dados: hidrantes.csv (mesmo repositório).
-   Para atualizar os hidrantes, edite hidrantes.csv direto pelo GitHub
-   (botão "Edit" no arquivo) e faça commit — a página busca a versão mais
-   recente automaticamente a cada carregamento.
+   Fonte de dados: banco Supabase (veja SUPABASE.md).
+   O mapa é público; só gestores logados cadastram/editam hidrantes, e
+   apenas nas cidades da sua unidade (regras aplicadas no próprio banco).
+   Enquanto SUPABASE_URL/SUPABASE_ANON_KEY estiverem vazios, o app lê o
+   arquivo hidrantes.csv do repositório, como antes.
    ======================================================================= */
+const SUPABASE_URL = '';
+const SUPABASE_ANON_KEY = '';
 const CSV_URL = './hidrantes.csv';
+const CACHE_KEY = 'hidrantes-cache-v1';
+
+const USE_SUPABASE = !!(SUPABASE_URL && SUPABASE_ANON_KEY);
+const sb = (USE_SUPABASE && window.supabase)
+  ? window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
+  : null;
 
 /* ---------- Parser de CSV (suporta campos entre aspas com vírgulas) ---------- */
 function parseCSV(text) {
@@ -245,6 +382,7 @@ function csvToHydrants(text) {
       endereco: (r[idx('endereco')] || '').trim(),
       lat, lng,
       referencia: (r[idx('referencia')] || '').trim(),
+      condicao: stateClass(r[idx('estado')] || ''),
       estado: (r[idx('estado')] || '').trim(),
       vazao: (r[idx('vazao')] || '').trim(),
       alteracoes: (r[idx('alteracoes')] || '').trim(),
@@ -267,10 +405,24 @@ function fmtDist(m){
   if(m < 1000) return Math.round(m) + " m";
   return (m/1000).toFixed(2) + " km";
 }
+/* Só usada para o CSV antigo; no banco a condição é escolhida pelo gestor. */
 function stateClass(estado){
   if(/não funciona|n[ãa]o funcional|inoperante|obstru[íi]d|danificad|quebrad/i.test(estado)) return "bad";
   if(/necessita|reparo|manopla|troca/i.test(estado)) return "warn";
   return "ok";
+}
+const CONDICAO_LABEL = { ok: 'Em boas condições', warn: 'Necessita reparo', bad: 'Não funcionando' };
+
+/* Os dados agora são digitados por várias unidades: sempre escapar antes de pôr no HTML. */
+function esc(v){
+  return String(v ?? '').replace(/[&<>"']/g, c =>
+    ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]));
+}
+function safeUrl(u){
+  return /^https?:\/\//i.test(u || '') ? u : '';
+}
+function mapsLink(lat, lng){
+  return `https://www.google.com/maps?q=${lat},${lng}`;
 }
 
 /* ---------- Mapa ---------- */
@@ -301,10 +453,13 @@ const hydrantIcon = (cls) => L.divIcon({
 });
 const userIcon = L.divIcon({ className:'', html:'<div class="user-dot"></div>', iconSize:[16,16], iconAnchor:[8,8] });
 
+const markersLayer = L.layerGroup().addTo(map);
+
 let HIDRANTES = [];
 let userMarker = null;
 let userLatLng = null;
-let pickMode = false;
+let pickMode = null; // null | 'user' (minha localização) | 'form' (posição do hidrante)
+let gestor = null;   // { nome, unidade, cidades, admin } quando logado
 let filterCidade = '';
 let filterBairro = '';
 
@@ -338,32 +493,53 @@ function filteredHydrants(){
 function populateFilters(){
   const cidades = [...new Set(HIDRANTES.map(h => h.cidade).filter(Boolean))].sort();
   cidadeSel.innerHTML = '<option value="">Todas as cidades</option>' +
-    cidades.map(c => `<option value="${c}">${c}</option>`).join('');
+    cidades.map(c => `<option value="${esc(c)}">${esc(c)}</option>`).join('');
+  if (filterCidade && !cidades.includes(filterCidade)) { filterCidade = ''; filterBairro = ''; }
   cidadeSel.value = filterCidade;
 
   const bairros = [...new Set(HIDRANTES.filter(h => !filterCidade || h.cidade === filterCidade)
     .map(h => h.bairro).filter(Boolean))].sort();
   bairroSel.innerHTML = '<option value="">Todos os bairros</option>' +
-    bairros.map(b => `<option value="${b}">${b}</option>`).join('');
+    bairros.map(b => `<option value="${esc(b)}">${esc(b)}</option>`).join('');
+  if (filterBairro && !bairros.includes(filterBairro)) filterBairro = '';
   bairroSel.value = filterBairro;
 }
 
+function canEdit(h){
+  return !!gestor && (gestor.admin || gestor.cidades.includes(h.cidade));
+}
+
 function renderMarkers(){
-  HIDRANTES.forEach(h => { if (h._marker) map.removeLayer(h._marker); });
+  markersLayer.clearLayers();
   filteredHydrants().forEach(h => {
-    const cls = stateClass(h.estado);
-    const marker = L.marker([h.lat, h.lng], { icon: hydrantIcon(cls) }).addTo(map);
+    const cls = h.condicao;
+    const link = safeUrl(h.link);
+    const marker = L.marker([h.lat, h.lng], { icon: hydrantIcon(cls) }).addTo(markersLayer);
     marker.bindPopup(`
-      <b>${h.endereco}</b><br>
-      <span class="popup-badge ${cls}">${cls==='bad'?'Não funcionando':cls==='warn'?'Necessita reparo':'Em boas condições'}</span><br>
-      <b>Cidade/Bairro:</b> ${h.cidade}${h.bairro ? ' — ' + h.bairro : ''}<br>
-      <b>Referência:</b> ${h.referencia}<br>
-      <b>Situação:</b> ${h.estado}<br>
-      ${h.link ? `<a class="popup-link" href="${h.link}" target="_blank" rel="noopener">Abrir no Google Maps ↗</a>` : ''}
+      <b>${esc(h.endereco)}</b><br>
+      <span class="popup-badge ${cls}">${CONDICAO_LABEL[cls]}</span><br>
+      <b>Cidade/Bairro:</b> ${esc(h.cidade)}${h.bairro ? ' — ' + esc(h.bairro) : ''}<br>
+      <b>Referência:</b> ${esc(h.referencia)}<br>
+      <b>Situação:</b> ${esc(h.estado)}<br>
+      ${link ? `<a class="popup-link" href="${esc(link)}" target="_blank" rel="noopener">Abrir no Google Maps ↗</a>` : ''}
+      ${h.atualizado_em ? `<span class="popup-meta">Atualizado em ${new Date(h.atualizado_em).toLocaleDateString('pt-BR')}</span>` : ''}
+      ${canEdit(h) ? `<button type="button" class="popup-edit" data-id="${esc(h.id)}">✏️ Editar</button>` : ''}
     `);
     h._marker = marker;
   });
 }
+
+/* Leaflet bloqueia a propagação de cliques do popup, então o botão é ligado ao abrir. */
+map.on('popupopen', (e) => {
+  const btn = e.popup.getElement().querySelector('.popup-edit');
+  if (!btn) return;
+  btn.addEventListener('click', () => {
+    const h = HIDRANTES.find(x => String(x.id) === btn.dataset.id);
+    if (!h) return;
+    map.closePopup();
+    openHydrantForm(h);
+  });
+});
 
 function renderList(){
   let items = filteredHydrants();
@@ -381,18 +557,18 @@ function renderList(){
     return;
   }
   items.forEach((h, rank) => {
-    const cls = stateClass(h.estado);
+    const cls = h.condicao;
     const card = document.createElement('div');
     card.className = 'hcard';
     card.innerHTML = `
       <div class="rank">${rank+1}</div>
       <div class="info">
-        <div class="addr">${h.endereco}</div>
-        <div class="ref">${h.referencia}</div>
+        <div class="addr">${esc(h.endereco)}</div>
+        <div class="ref">${esc(h.referencia)}</div>
         <div class="meta">
           <span class="state-dot state-${cls}"></span>
           ${h.dist !== undefined ? `<span class="dist-badge">${fmtDist(h.dist)}</span>` : ''}
-          <span class="city-badge">${h.cidade}${h.bairro ? ' · ' + h.bairro : ''}</span>
+          <span class="city-badge">${esc(h.cidade)}${h.bairro ? ' · ' + esc(h.bairro) : ''}</span>
         </div>
       </div>
     `;
@@ -443,22 +619,27 @@ function setUserLocation(lat, lng, label){
   renderList();
 }
 
-function togglePickMode(on){
-  pickMode = on;
-  const mapEl = document.getElementById('map');
-  if(on){
-    mapEl.style.cursor = 'crosshair';
-    banner.textContent = 'Toque/clique no mapa no local onde você está para calcular os hidrantes mais próximos.';
-    banner.classList.add('show');
-  } else {
-    mapEl.style.cursor = '';
-  }
+function startPick(mode){
+  pickMode = mode;
+  document.getElementById('map').style.cursor = 'crosshair';
+  banner.textContent = mode === 'form'
+    ? 'Toque/clique no mapa no local exato do hidrante.'
+    : 'Toque/clique no mapa no local onde você está para calcular os hidrantes mais próximos.';
+  banner.classList.add('show');
 }
 map.on('click', (e) => {
   if(!pickMode) return;
-  setUserLocation(e.latlng.lat, e.latlng.lng, 'Sua localização (definida manualmente)');
-  togglePickMode(false);
+  const mode = pickMode;
+  pickMode = null;
+  document.getElementById('map').style.cursor = '';
   banner.classList.remove('show');
+  if(mode === 'form'){
+    fLat.value = e.latlng.lat.toFixed(6);
+    fLng.value = e.latlng.lng.toFixed(6);
+    showModal(hydrantForm);
+  } else {
+    setUserLocation(e.latlng.lat, e.latlng.lng, 'Sua localização (definida manualmente)');
+  }
 });
 
 function locateUser(){
@@ -494,31 +675,290 @@ function locateUser(){
 }
 
 locateBtn.addEventListener('click', locateUser);
-pickBtn.addEventListener('click', () => togglePickMode(true));
+pickBtn.addEventListener('click', () => startPick('user'));
 
-/* ---------- Carregamento dos dados (CSV do repositório) ---------- */
+/* ---------- Carregamento dos dados ---------- */
+async function fetchHydrants(){
+  if(USE_SUPABASE){
+    if(!sb) throw new Error('biblioteca do Supabase não carregou');
+    // O Supabase devolve no máximo 1000 linhas por consulta: busca em páginas.
+    const PAGE = 1000;
+    let all = [];
+    for(let from = 0; ; from += PAGE){
+      const { data, error } = await sb.from('hidrantes')
+        .select('id,cidade,bairro,endereco,lat,lng,referencia,condicao,estado,vazao,alteracoes,link,atualizado_em')
+        .order('id').range(from, from + PAGE - 1);
+      if(error) throw new Error(error.message);
+      all = all.concat(data);
+      if(data.length < PAGE) break;
+    }
+    return all;
+  }
+  const res = await fetch(CSV_URL + '?t=' + Date.now(), { cache: 'no-store' });
+  if(!res.ok) throw new Error('HTTP ' + res.status);
+  const list = csvToHydrants(await res.text());
+  if(list.length === 0) throw new Error('CSV vazio ou em formato inesperado');
+  return list;
+}
+
+/* Última lista baixada fica no aparelho, para o mapa funcionar sem internet. */
+function saveCache(list){
+  try {
+    localStorage.setItem(CACHE_KEY, JSON.stringify({ salvoEm: Date.now(), itens: list },
+      (k, v) => k === '_marker' ? undefined : v));
+  } catch (e) {}
+}
+function readCache(){
+  try { return JSON.parse(localStorage.getItem(CACHE_KEY)); } catch (e) { return null; }
+}
+
+let firstLoad = true;
 async function loadData(){
   try {
-    const res = await fetch(CSV_URL + '?t=' + Date.now(), { cache: 'no-store' });
-    if(!res.ok) throw new Error('HTTP ' + res.status);
-    const text = await res.text();
-    HIDRANTES = csvToHydrants(text);
-    if(HIDRANTES.length === 0) throw new Error('CSV vazio ou em formato inesperado');
-
-    populateFilters();
-    refreshView();
-    statusBox.textContent = `${HIDRANTES.length} hidrantes carregados`;
-    locateBtn.disabled = false;
-    pickBtn.disabled = false;
-    locateUser();
+    HIDRANTES = await fetchHydrants();
+    saveCache(HIDRANTES);
   } catch (err) {
-    statusBox.textContent = 'Erro ao carregar dados';
-    banner.innerHTML = 'Não foi possível carregar <b>hidrantes.csv</b>. Verifique se o arquivo está publicado junto com esta página. (' + err.message + ')';
+    const cached = readCache();
+    if(!cached || !cached.itens || !cached.itens.length){
+      statusBox.textContent = 'Erro ao carregar dados';
+      banner.textContent = 'Não foi possível carregar os hidrantes. Verifique sua conexão. (' + err.message + ')';
+      banner.classList.add('show');
+      listEl.innerHTML = '<div class="empty-msg">Não foi possível carregar os hidrantes.</div>';
+      return;
+    }
+    HIDRANTES = cached.itens;
+    banner.textContent = 'Sem conexão — exibindo os dados salvos em ' +
+      new Date(cached.salvoEm).toLocaleString('pt-BR') + '.';
     banner.classList.add('show');
-    listEl.innerHTML = '<div class="empty-msg">Não foi possível carregar os hidrantes.</div>';
+  }
+
+  populateFilters();
+  refreshView();
+  statusBox.textContent = `${HIDRANTES.length} hidrantes carregados`;
+  locateBtn.disabled = false;
+  pickBtn.disabled = false;
+  if(firstLoad){
+    firstLoad = false;
+    if(HIDRANTES.length){
+      map.fitBounds(L.latLngBounds(HIDRANTES.map(h => [h.lat, h.lng])), { padding: [40,40], maxZoom: 14 });
+    }
+    locateUser();
   }
 }
 loadData();
+
+/* ---------- Área do gestor ---------- */
+const modal = document.getElementById('modal');
+const loginForm = document.getElementById('loginForm');
+const hydrantForm = document.getElementById('hydrantForm');
+const gestorBtn = document.getElementById('gestorBtn');
+const addBtn = document.getElementById('addBtn');
+const subtitle = document.getElementById('subtitle');
+const SUBTITLE_PADRAO = subtitle.textContent;
+const fLat = document.getElementById('fLat');
+const fLng = document.getElementById('fLng');
+const formError = document.getElementById('formError');
+const loginError = document.getElementById('loginError');
+let editingId = null;
+
+function showModal(form){
+  [loginForm, hydrantForm].forEach(f => f.style.display = f === form ? 'block' : 'none');
+  modal.classList.add('show');
+}
+function closeModal(){
+  modal.classList.remove('show');
+}
+modal.addEventListener('click', (e) => {
+  if(e.target === modal || e.target.closest('[data-close]')) closeModal();
+});
+document.addEventListener('keydown', (e) => {
+  if(e.key === 'Escape') closeModal();
+});
+function showError(el, msg){
+  el.textContent = msg;
+  el.classList.toggle('show', !!msg);
+}
+
+async function refreshGestor(){
+  gestor = null;
+  if(sb){
+    const { data: { session } } = await sb.auth.getSession();
+    if(session){
+      const { data } = await sb.from('gestores')
+        .select('nome,unidade,cidades,admin').eq('user_id', session.user.id).maybeSingle();
+      if(data) gestor = data;
+    }
+  }
+  gestorBtn.textContent = gestor ? '🚪 Sair' : '🔐 Gestor';
+  gestorBtn.title = gestor ? `Sair (${gestor.nome})` : 'Acesso dos gestores';
+  addBtn.style.display = gestor ? 'flex' : 'none';
+  subtitle.textContent = gestor ? `Gestor: ${gestor.nome} · ${gestor.unidade}` : SUBTITLE_PADRAO;
+  if(HIDRANTES.length) renderMarkers(); // mostra/esconde os botões "Editar"
+}
+
+gestorBtn.addEventListener('click', async () => {
+  if(gestor){
+    if(!confirm(`Sair da conta de ${gestor.nome}?`)) return;
+    await sb.auth.signOut();
+    await refreshGestor();
+    return;
+  }
+  showError(loginError, '');
+  loginForm.reset();
+  showModal(loginForm);
+  document.getElementById('loginEmail').focus();
+});
+
+loginForm.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const submit = document.getElementById('loginSubmit');
+  submit.disabled = true;
+  showError(loginError, '');
+  try {
+    const { error } = await sb.auth.signInWithPassword({
+      email: document.getElementById('loginEmail').value.trim(),
+      password: document.getElementById('loginSenha').value
+    });
+    if(error) throw new Error('E-mail ou senha inválidos.');
+    await refreshGestor();
+    if(!gestor){
+      await sb.auth.signOut();
+      throw new Error('Este usuário não está cadastrado como gestor. Procure o administrador do sistema.');
+    }
+    closeModal();
+  } catch (err) {
+    showError(loginError, err.message);
+  } finally {
+    submit.disabled = false;
+  }
+});
+
+function openHydrantForm(h){
+  editingId = h ? h.id : null;
+  document.getElementById('formTitle').textContent = h ? 'Editar hidrante' : 'Novo hidrante';
+  document.getElementById('formHint').textContent = gestor.admin
+    ? 'Administrador: pode cadastrar em qualquer cidade.'
+    : `Cidades da sua unidade: ${gestor.cidades.join(', ')}.`;
+
+  // Gestor comum escolhe entre as cidades da unidade; admin digita livremente.
+  const wrap = document.getElementById('fCidadeWrap');
+  if(gestor.admin){
+    wrap.innerHTML = '<input id="fCidade" list="cidadesList" required>';
+    document.getElementById('cidadesList').innerHTML =
+      [...new Set(HIDRANTES.map(x => x.cidade))].sort().map(c => `<option value="${esc(c)}">`).join('');
+  } else {
+    wrap.innerHTML = '<select id="fCidade" required>' +
+      gestor.cidades.map(c => `<option value="${esc(c)}">${esc(c)}</option>`).join('') + '</select>';
+  }
+
+  const v = h || { cidade: filterCidade || gestor.cidades[0] || '', condicao: 'ok' };
+  document.getElementById('fCidade').value = v.cidade || '';
+  document.getElementById('fBairro').value = v.bairro || '';
+  document.getElementById('fEndereco').value = v.endereco || '';
+  fLat.value = v.lat ?? '';
+  fLng.value = v.lng ?? '';
+  document.getElementById('fReferencia').value = v.referencia || '';
+  document.getElementById('fCondicao').value = v.condicao || 'ok';
+  document.getElementById('fEstado').value = v.estado || '';
+  document.getElementById('fVazao').value = v.vazao || '';
+  document.getElementById('fAlteracoes').value = v.alteracoes || '';
+  document.getElementById('fLink').value = v.link || '';
+  document.getElementById('fDeleteBtn').style.display = h ? '' : 'none';
+  showError(formError, '');
+  showModal(hydrantForm);
+}
+
+addBtn.addEventListener('click', () => openHydrantForm(null));
+
+document.getElementById('fGpsBtn').addEventListener('click', () => {
+  if(!navigator.geolocation){ showError(formError, 'GPS indisponível neste aparelho.'); return; }
+  showError(formError, 'Obtendo posição do GPS…');
+  navigator.geolocation.getCurrentPosition(
+    (pos) => {
+      fLat.value = pos.coords.latitude.toFixed(6);
+      fLng.value = pos.coords.longitude.toFixed(6);
+      showError(formError, '');
+    },
+    () => showError(formError, 'Não foi possível obter a posição do GPS. Use "Marcar no mapa".'),
+    { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
+  );
+});
+
+document.getElementById('fMapBtn').addEventListener('click', () => {
+  const lat = parseFloat(fLat.value), lng = parseFloat(fLng.value);
+  if(!isNaN(lat) && !isNaN(lng)) map.setView([lat, lng], 18);
+  closeModal();
+  startPick('form');
+});
+
+hydrantForm.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const val = id => document.getElementById(id).value.trim();
+  const lat = parseFloat(val('fLat').replace(',', '.'));
+  const lng = parseFloat(val('fLng').replace(',', '.'));
+  if(isNaN(lat) || isNaN(lng) || Math.abs(lat) > 90 || Math.abs(lng) > 180){
+    showError(formError, 'Coordenadas inválidas. Use o GPS ou marque no mapa.');
+    return;
+  }
+  // Confere se o ponto caiu em SC — pega latitude/longitude trocadas ou sem o sinal de menos.
+  if((lat < -29.5 || lat > -25.8 || lng < -54 || lng > -48.2) &&
+     !confirm('As coordenadas estão fora de Santa Catarina. Salvar mesmo assim?')) return;
+
+  const rec = {
+    cidade: val('fCidade'), bairro: val('fBairro'), endereco: val('fEndereco'),
+    lat, lng,
+    referencia: val('fReferencia'), condicao: val('fCondicao'), estado: val('fEstado'),
+    vazao: val('fVazao'), alteracoes: val('fAlteracoes'),
+    link: safeUrl(val('fLink')) || mapsLink(lat, lng)
+  };
+  if(!rec.cidade || !rec.endereco){
+    showError(formError, 'Preencha cidade e endereço.');
+    return;
+  }
+
+  const saveBtn = document.getElementById('fSaveBtn');
+  saveBtn.disabled = true;
+  showError(formError, '');
+  try {
+    const q = editingId
+      ? sb.from('hidrantes').update(rec).eq('id', editingId)
+      : sb.from('hidrantes').insert(rec);
+    const { data, error } = await q.select('id');
+    if(error) throw new Error(/row-level security/i.test(error.message)
+      ? `Sem permissão para cadastrar hidrantes em ${rec.cidade}.` : error.message);
+    if(!data || !data.length) throw new Error(`Sem permissão para alterar hidrantes em ${rec.cidade}.`);
+    closeModal();
+    await loadData();
+    const saved = HIDRANTES.find(x => x.id === data[0].id);
+    if(saved && saved._marker){
+      map.setView([saved.lat, saved.lng], 17);
+      saved._marker.openPopup();
+    }
+  } catch (err) {
+    showError(formError, 'Não foi possível salvar: ' + err.message);
+  } finally {
+    saveBtn.disabled = false;
+  }
+});
+
+document.getElementById('fDeleteBtn').addEventListener('click', async () => {
+  if(!editingId || !confirm('Excluir este hidrante definitivamente?')) return;
+  const { data, error } = await sb.from('hidrantes').delete().eq('id', editingId).select('id');
+  if(error || !data || !data.length){
+    showError(formError, 'Não foi possível excluir: ' + (error ? error.message : 'sem permissão.'));
+    return;
+  }
+  closeModal();
+  await loadData();
+});
+
+if(sb){
+  gestorBtn.style.display = 'flex';
+  refreshGestor();
+  sb.auth.onAuthStateChange((event) => {
+    if(event === 'SIGNED_OUT') refreshGestor();
+  });
+}
 
 /* ---------- PWA: instalação e service worker ---------- */
 if ('serviceWorker' in navigator && window.isSecureContext !== false) {
@@ -534,7 +974,28 @@ window.addEventListener('beforeinstallprompt', (e) => {
   deferredInstallPrompt = e;
   installBtn.style.display = 'flex';
 });
+/* iPhone/iPad não têm o evento de instalação: mostra o passo a passo do
+   menu Compartilhar. Abre sozinho na primeira visita; depois, pelo botão. */
+const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent) ||
+  (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+const isStandalone = navigator.standalone === true ||
+  window.matchMedia('(display-mode: standalone)').matches;
+const iosInstall = document.getElementById('iosInstall');
+const IOS_HINT_KEY = 'hidrantes-ios-dica-vista';
+
+if (isIOS && !isStandalone) {
+  installBtn.style.display = 'flex';
+  let seen = false;
+  try { seen = localStorage.getItem(IOS_HINT_KEY) === '1'; } catch (e) {}
+  if (!seen) iosInstall.classList.add('show');
+}
+document.getElementById('iosInstallClose').addEventListener('click', () => {
+  iosInstall.classList.remove('show');
+  try { localStorage.setItem(IOS_HINT_KEY, '1'); } catch (e) {}
+});
+
 installBtn.addEventListener('click', async () => {
+  if (isIOS) { iosInstall.classList.add('show'); return; }
   if (!deferredInstallPrompt) return;
   installBtn.style.display = 'none';
   deferredInstallPrompt.prompt();
