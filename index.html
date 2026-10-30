@@ -767,6 +767,7 @@ function showModal(form){
 }
 function closeModal(){
   modal.classList.remove('show');
+  if(reloadPending && pickMode !== 'form') location.reload();
 }
 modal.addEventListener('click', (e) => {
   if(e.target === modal || e.target.closest('[data-close]')) closeModal();
@@ -887,8 +888,8 @@ document.getElementById('fGpsBtn').addEventListener('click', () => {
 document.getElementById('fMapBtn').addEventListener('click', () => {
   const lat = parseFloat(fLat.value), lng = parseFloat(fLng.value);
   if(!isNaN(lat) && !isNaN(lng)) map.setView([lat, lng], 18);
+  startPick('form'); // antes de fechar, para não recarregar no meio do cadastro
   closeModal();
-  startPick('form');
 });
 
 hydrantForm.addEventListener('submit', async (e) => {
@@ -961,7 +962,17 @@ if(sb){
 }
 
 /* ---------- PWA: instalação e service worker ---------- */
+let reloadPending = false;
 if ('serviceWorker' in navigator && window.isSecureContext !== false) {
+  // Quando uma versão nova do service worker assume, recarrega para exibir o
+  // app atualizado. Não na primeira instalação, e se houver um cadastro em
+  // andamento, só depois que o formulário for fechado (ver closeModal).
+  const hadController = !!navigator.serviceWorker.controller;
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (!hadController || reloadPending) return;
+    reloadPending = true;
+    if (!modal.classList.contains('show') && pickMode !== 'form') location.reload();
+  });
   window.addEventListener('load', () => {
     navigator.serviceWorker.register('./service-worker.js').catch(() => {});
   });

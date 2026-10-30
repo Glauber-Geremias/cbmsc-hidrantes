@@ -8,6 +8,28 @@ const APP_SHELL = [
   './icons/apple-touch-icon.png'
 ];
 
+const NETWORK_TIMEOUT_MS = 4000;
+
+function networkFirst(request) {
+  // "no-cache" revalida com o servidor em vez de usar o cache HTTP do
+  // GitHub Pages (até 10 min). Requisições de navegação não aceitam
+  // opções, por isso o fetch é feito pela URL.
+  const network = fetch(request.url, { cache: 'no-cache', credentials: 'same-origin' })
+    .then((res) => {
+      if (res.ok) {
+        const copy = res.clone();
+        caches.open(CACHE_NAME).then((cache) => cache.put(request, copy));
+      }
+      return res;
+    });
+  network.catch(() => {});
+  const timeout = new Promise((resolve) => setTimeout(resolve, NETWORK_TIMEOUT_MS))
+    .then(() => caches.match(request));
+  return Promise.race([network, timeout])
+    .then((res) => res || network)
+    .catch(() => caches.match(request));
+}
+
 self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => cache.addAll(APP_SHELL))
@@ -49,20 +71,10 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // App shell (mesma origem): cache primeiro, atualiza em segundo plano.
+  // App shell (mesma origem): rede primeiro, para a versão nova aparecer já
+  // na primeira abertura; sem rede (ou rede lenta), usa o cache.
   if (url.origin === self.location.origin) {
-    event.respondWith(
-      caches.match(request).then((cached) => {
-        const fetchPromise = fetch(request)
-          .then((res) => {
-            const copy = res.clone();
-            caches.open(CACHE_NAME).then((cache) => cache.put(request, copy));
-            return res;
-          })
-          .catch(() => cached);
-        return cached || fetchPromise;
-      })
-    );
+    event.respondWith(networkFirst(request));
     return;
   }
 
