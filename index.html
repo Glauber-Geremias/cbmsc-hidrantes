@@ -275,10 +275,10 @@ function stateClass(estado){
 
 /* ---------- Mapa ---------- */
 const map = L.map('map', { zoomControl: true }).setView([-28.9357, -49.4864], 12);
-L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
-  maxZoom: 20,
-  subdomains: 'abcd',
-  attribution: '&copy; OpenStreetMap contributors &copy; CARTO'
+// O CARTO passou a exigir chave de API; o OpenStreetMap é gratuito com atribuição.
+L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+  maxZoom: 19,
+  attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
 }).addTo(map);
 
 const hydrantIcon = (cls) => L.divIcon({
