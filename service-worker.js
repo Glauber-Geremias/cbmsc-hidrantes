@@ -56,21 +56,6 @@ self.addEventListener('fetch', (event) => {
   // API do Supabase: sempre rede; o app guarda a última lista por conta própria.
   if (url.hostname.endsWith('.supabase.co')) return;
 
-  // Dados dos hidrantes: sempre tenta a rede primeiro (pega atualizações),
-  // cai para o cache se estiver offline.
-  if (url.pathname.endsWith('hidrantes.csv')) {
-    event.respondWith(
-      fetch(request)
-        .then((res) => {
-          const copy = res.clone();
-          caches.open(CACHE_NAME).then((cache) => cache.put(request, copy));
-          return res;
-        })
-        .catch(() => caches.match(request))
-    );
-    return;
-  }
-
   // App shell (mesma origem): rede primeiro, para a versão nova aparecer já
   // na primeira abertura; sem rede (ou rede lenta), usa o cache.
   if (url.origin === self.location.origin) {

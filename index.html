@@ -335,14 +335,12 @@
    2. Planilhas do Google (veja PLANILHA.md), se SHEET_ID estiver
       preenchido: a planilha pai lista os batalhões e o link da planilha
       de cada um; cada batalhão mantém a sua.
-   3. Arquivo hidrantes.csv do repositório.
    ======================================================================= */
 const SUPABASE_URL = '';
 const SUPABASE_ANON_KEY = '';
 const SHEET_ID = '1GwXKAi-51_34cBkiFNm4YnAqXTIWWBqSjVU109rOIbg'; // planilha pai: trecho entre /d/ e /edit do link
 const SHEET_INDEX_TAB = 'Batalhões';  // aba da planilha pai com a lista de batalhões
 const BATALHAO_TAB = 'Hidrantes';     // aba lida em cada planilha de batalhão
-const CSV_URL = './hidrantes.csv';
 const CACHE_KEY = 'hidrantes-cache-v1';
 
 const USE_SUPABASE = !!(SUPABASE_URL && SUPABASE_ANON_KEY);
@@ -379,7 +377,8 @@ function norm(s) {
     .toLowerCase().replace(/\s+/g, ' ').trim();
 }
 
-/* Nomes de coluna aceitos: hidrantes.csv, modelo da planilha e a planilha antiga. */
+/* Nomes de coluna aceitos: modelo atual da planilha e formatos antigos
+   (colunas lat/lng separadas; planilha sem Cidade e com o bairro no endereço). */
 const COLUNAS = {
   cidade: ['cidade'],
   bairro: ['bairro'],
@@ -804,9 +803,7 @@ async function fetchHydrants(){
     return all;
   }
   if(SHEET_ID) return fetchSheet();
-  const list = rowsToHydrants(await fetchCSV(CSV_URL));
-  if(list.length === 0) throw new Error('CSV vazio ou em formato inesperado');
-  return list;
+  throw new Error('nenhuma fonte de dados configurada (SHEET_ID ou Supabase)');
 }
 
 async function fetchCSV(url){

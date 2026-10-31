@@ -4,8 +4,8 @@ O mapa é público. Só **gestores** cadastrados podem incluir, editar ou exclui
 hidrantes, e apenas nas cidades da sua unidade. Essas regras ficam no próprio
 banco: mesmo que alguém altere o app, o banco recusa a gravação.
 
-Enquanto o Supabase não estiver configurado, o app continua lendo
-`hidrantes.csv`, como antes.
+Enquanto o Supabase não estiver configurado, o app continua lendo as
+planilhas do Google (veja [PLANILHA.md](PLANILHA.md)).
 
 ## 1. Criar o projeto
 

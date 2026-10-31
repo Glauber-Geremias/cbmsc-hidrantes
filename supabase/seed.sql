@@ -1,4 +1,4 @@
--- Carga inicial: hidrantes que estavam em hidrantes.csv (17º BBM).
+-- Carga inicial: os 21 hidrantes do 17º BBM (cópia do antigo hidrantes.csv).
 -- Execute no SQL Editor do Supabase depois de schema.sql, uma única vez.
 insert into public.hidrantes
   (cidade, bairro, endereco, lat, lng, referencia, condicao, estado, vazao, alteracoes, link)
