@@ -243,6 +243,7 @@
         <span id="panelChevron">▼</span>
       </button>
       <div id="filters">
+        <select id="batalhaoFilter" style="display:none;"><option value="">Todos os batalhões</option></select>
         <select id="cidadeFilter"><option value="">Todas as cidades</option></select>
         <select id="bairroFilter"><option value="">Todos os bairros</option></select>
       </div>
@@ -331,14 +332,16 @@
    Fonte de dados, na ordem de prioridade:
    1. Banco Supabase (veja SUPABASE.md), se SUPABASE_URL/ANON_KEY
       estiverem preenchidos. Gestores logados cadastram pelo próprio app.
-   2. Planilha do Google (veja PLANILHA.md), se SHEET_ID estiver
-      preenchido. Cada quartel edita a sua aba direto na planilha.
+   2. Planilhas do Google (veja PLANILHA.md), se SHEET_ID estiver
+      preenchido: a planilha pai lista os batalhões e o link da planilha
+      de cada um; cada batalhão mantém a sua.
    3. Arquivo hidrantes.csv do repositório.
    ======================================================================= */
 const SUPABASE_URL = '';
 const SUPABASE_ANON_KEY = '';
-const SHEET_ID = '1cYObRJBzt_98DwaS3w5o6bUGMuPfS_V2d5dGZPnyzec';             // o trecho entre /d/ e /edit no link da planilha
-const SHEET_INDEX_TAB = 'Quartéis';
+const SHEET_ID = '1GwXKAi-51_34cBkiFNm4YnAqXTIWWBqSjVU109rOIbg'; // planilha pai: trecho entre /d/ e /edit do link
+const SHEET_INDEX_TAB = 'Batalhões';  // aba da planilha pai com a lista de batalhões
+const BATALHAO_TAB = 'Hidrantes';     // aba lida em cada planilha de batalhão
 const CSV_URL = './hidrantes.csv';
 const CACHE_KEY = 'hidrantes-cache-v1';
 
@@ -391,6 +394,7 @@ const COLUNAS = {
   acoes: ['acoes realizadas'],
   alteracoes: ['alteracoes', 'providencias', 'providencias necessarias'],
   link: ['link', 'localizacao'],
+  vistoria: ['data da vistoria', 'ultima vistoria'],
   foto: ['foto', 'foto (link)']
 };
 
@@ -466,6 +470,7 @@ function rowsToHydrants(rows, cidadePadrao) {
       acoes: get(r, 'acoes'),
       alteracoes: get(r, 'alteracoes'),
       link: get(r, 'link') || mapsLink(pos.lat, pos.lng),
+      vistoria: get(r, 'vistoria'),
       foto: get(r, 'foto')
     });
   }
@@ -540,6 +545,7 @@ let userMarker = null;
 let userLatLng = null;
 let pickMode = null; // null | 'user' (minha localização) | 'form' (posição do hidrante)
 let gestor = null;   // { nome, unidade, cidades, admin } quando logado
+let filterBatalhao = '';
 let filterCidade = '';
 let filterBairro = '';
 
@@ -547,6 +553,7 @@ const listEl = document.getElementById('list');
 const panelTitle = document.getElementById('panelTitle');
 const statusBox = document.getElementById('statusBox');
 const banner = document.getElementById('banner');
+const batalhaoSel = document.getElementById('batalhaoFilter');
 const cidadeSel = document.getElementById('cidadeFilter');
 const bairroSel = document.getElementById('bairroFilter');
 const locateBtn = document.getElementById('locateBtn');
@@ -565,19 +572,31 @@ panelToggle.addEventListener('click', () => {
 
 function filteredHydrants(){
   return HIDRANTES.filter(h =>
+    (!filterBatalhao || h.batalhao === filterBatalhao) &&
     (!filterCidade || h.cidade === filterCidade) &&
     (!filterBairro || h.bairro === filterBairro)
   );
 }
 
 function populateFilters(){
-  const cidades = [...new Set(HIDRANTES.map(h => h.cidade).filter(Boolean))].sort();
+  // Filtro de batalhão só aparece quando há mais de um.
+  const batalhoes = [...new Set(HIDRANTES.map(h => h.batalhao).filter(Boolean))]
+    .sort((a, b) => a.localeCompare(b, 'pt-BR', { numeric: true }));
+  batalhaoSel.style.display = batalhoes.length > 1 ? '' : 'none';
+  batalhaoSel.innerHTML = '<option value="">Todos os batalhões</option>' +
+    batalhoes.map(b => `<option value="${esc(b)}">${esc(b)}</option>`).join('');
+  if (filterBatalhao && !batalhoes.includes(filterBatalhao)) { filterBatalhao = ''; filterCidade = ''; filterBairro = ''; }
+  batalhaoSel.value = filterBatalhao;
+
+  const cidades = [...new Set(HIDRANTES.filter(h => !filterBatalhao || h.batalhao === filterBatalhao)
+    .map(h => h.cidade).filter(Boolean))].sort();
   cidadeSel.innerHTML = '<option value="">Todas as cidades</option>' +
     cidades.map(c => `<option value="${esc(c)}">${esc(c)}</option>`).join('');
   if (filterCidade && !cidades.includes(filterCidade)) { filterCidade = ''; filterBairro = ''; }
   cidadeSel.value = filterCidade;
 
-  const bairros = [...new Set(HIDRANTES.filter(h => !filterCidade || h.cidade === filterCidade)
+  const bairros = [...new Set(HIDRANTES.filter(h =>
+      (!filterBatalhao || h.batalhao === filterBatalhao) && (!filterCidade || h.cidade === filterCidade))
     .map(h => h.bairro).filter(Boolean))].sort();
   bairroSel.innerHTML = '<option value="">Todos os bairros</option>' +
     bairros.map(b => `<option value="${esc(b)}">${esc(b)}</option>`).join('');
@@ -599,8 +618,10 @@ function renderMarkers(){
       <b>${esc(h.endereco)}</b><br>
       <span class="popup-badge ${cls}">${CONDICAO_LABEL[cls]}</span><br>
       <b>Cidade/Bairro:</b> ${esc(h.cidade)}${h.bairro ? ' — ' + esc(h.bairro) : ''}<br>
+      ${h.batalhao ? `<b>Batalhão:</b> ${esc(h.batalhao)}<br>` : ''}
       <b>Referência:</b> ${esc(h.referencia)}<br>
       <b>Situação:</b> ${esc(h.estado)}<br>
+      ${h.vistoria ? `<b>Última vistoria:</b> ${esc(h.vistoria)}<br>` : ''}
       ${link ? `<a class="popup-link" href="${esc(link)}" target="_blank" rel="noopener">Abrir no Google Maps ↗</a>` : ''}
       ${safeUrl(h.foto) ? `<br><a class="popup-link" href="${esc(h.foto)}" target="_blank" rel="noopener">📷 Ver foto ↗</a>` : ''}
       ${h.atualizado_em ? `<span class="popup-meta">Atualizado em ${new Date(h.atualizado_em).toLocaleDateString('pt-BR')}</span>` : ''}
@@ -668,6 +689,13 @@ function refreshView(){
   renderList();
 }
 
+batalhaoSel.addEventListener('change', () => {
+  filterBatalhao = batalhaoSel.value;
+  filterCidade = '';
+  filterBairro = '';
+  populateFilters();
+  refreshView();
+});
 cidadeSel.addEventListener('change', () => {
   filterCidade = cidadeSel.value;
   filterBairro = '';
@@ -790,35 +818,52 @@ async function fetchCSV(url){
   return parseCSV(text).filter(r => r.some(c => c && c.trim() !== ''));
 }
 
-function sheetTabUrl(tab){
-  return `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&headers=1&sheet=${encodeURIComponent(tab)}`;
+function sheetTabUrl(sheetId, tab){
+  return `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?tqx=out:csv&headers=1&sheet=${encodeURIComponent(tab)}`;
 }
 
-/* Planilha do Google: a aba-índice lista as abas dos quartéis; cada uma é
-   baixada em paralelo. Uma aba com problema não impede as outras. */
-async function fetchSheet(){
-  const indice = await fetchCSV(sheetTabUrl(SHEET_INDEX_TAB));
-  const colAba = indice.length ? indice[0].map(norm).indexOf('aba') : -1;
-  if(colAba < 0) throw new Error(`aba "${SHEET_INDEX_TAB}" não encontrada na planilha`);
-  const abas = [...new Set(indice.slice(1).map(r => (r[colAba] || '').trim()).filter(Boolean))];
+/* Aceita o link completo copiado da barra do navegador ou só o ID. */
+function sheetIdFrom(link){
+  const s = String(link || '').trim();
+  const m = s.match(/\/spreadsheets\/d\/([\w-]{20,})/);
+  return m ? m[1] : (/^[\w-]{20,}$/.test(s) ? s : '');
+}
 
-  const results = await Promise.allSettled(abas.map(async (aba) => {
-    const rows = await fetchCSV(sheetTabUrl(aba));
-    // Nome de aba inexistente faz o Google devolver outra aba; o cabeçalho denuncia.
-    const header = rows.length ? rows[0].map(norm) : [];
-    if(!header.some(h => COLUNAS.coordenadas.includes(h) || h === 'lat'))
-      throw new Error('aba não encontrada ou sem a coluna Coordenadas');
-    return rowsToHydrants(rows, aba);
-  }));
+/* Planilha pai → planilha de cada batalhão ativo → aba Hidrantes.
+   Os batalhões são baixados em paralelo; um com problema não impede os outros. */
+async function fetchSheet(){
+  const indice = await fetchCSV(sheetTabUrl(SHEET_ID, SHEET_INDEX_TAB));
+  const header = indice.length ? indice[0].map(norm) : [];
+  const cNome = header.indexOf('batalhao'), cLink = header.indexOf('link da planilha'), cAtivo = header.indexOf('ativo');
+  if(cNome < 0 || cLink < 0) throw new Error(`aba "${SHEET_INDEX_TAB}" não encontrada na planilha pai`);
 
   const falhas = [];
+  const batalhoes = [];
+  for(const r of indice.slice(1)){
+    const nome = (r[cNome] || '').trim();
+    // "Ativo = Não" tira o batalhão do app sem apagar a linha.
+    if(!nome || (cAtivo >= 0 && /^nao/.test(norm(r[cAtivo])))) continue;
+    const id = sheetIdFrom(r[cLink]);
+    if(id) batalhoes.push({ nome, id });
+    else falhas.push(`${nome} (link da planilha ausente ou inválido)`);
+  }
+
+  const results = await Promise.allSettled(batalhoes.map(async (b) => {
+    const rows = await fetchCSV(sheetTabUrl(b.id, BATALHAO_TAB));
+    // Aba inexistente faz o Google devolver a primeira aba; o cabeçalho denuncia.
+    const head = rows.length ? rows[0].map(norm) : [];
+    if(!head.some(h => COLUNAS.coordenadas.includes(h)))
+      throw new Error(`aba "${BATALHAO_TAB}" não encontrada ou sem a coluna Coordenadas`);
+    return rowsToHydrants(rows, '').map(h => ({ ...h, batalhao: b.nome }));
+  }));
+
   let all = [];
   results.forEach((r, i) => {
     if(r.status === 'fulfilled') all = all.concat(r.value);
-    else falhas.push(`${abas[i]} (${r.reason.message})`);
+    else falhas.push(`${batalhoes[i].nome} (${r.reason.message})`);
   });
-  if(!all.length) throw new Error(falhas.length ? 'nenhuma aba pôde ser lida: ' + falhas.join('; ') : 'planilha sem hidrantes');
-  loadWarning = falhas.length ? 'Algumas abas da planilha não puderam ser lidas: ' + falhas.join('; ') + '.' : '';
+  if(!all.length) throw new Error(falhas.length ? 'nenhum batalhão pôde ser lido: ' + falhas.join('; ') : 'nenhum hidrante cadastrado');
+  loadWarning = falhas.length ? 'Planilhas de batalhão com problema: ' + falhas.join('; ') + '.' : '';
   return all;
 }
 

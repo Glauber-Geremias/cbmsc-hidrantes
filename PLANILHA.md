@@ -1,107 +1,103 @@
-# Hidrantes pela planilha do Google
+# Hidrantes pelas planilhas do Google
 
-Cada quartel cadastra os seus hidrantes numa aba de uma planilha do Google
-Planilhas, e o app lê a planilha sempre que é aberto. Não é preciso publicar
-nada: basta a planilha estar compartilhada por link.
+Cada **batalhão** mantém a sua própria planilha com os hidrantes de todas as
+suas cidades. Uma **planilha pai** lista os batalhões e o link da planilha de
+cada um. O app lê tudo sempre que é aberto: não é preciso publicar nada,
+basta as planilhas estarem compartilhadas por link.
 
-## Como o app lê a planilha
-
-```
-Aba "Quartéis" (1ª aba)        Abas dos quartéis
-┌──────────────────────┐       ┌─ Araranguá ──────────────┐
-│ Aba                  │ ───>  ├─ Balneário Arroio do Silva┤ ───> App
-│ Araranguá            │       ├─ Maracajá ───────────────┤
-│ Balneário Arroio...  │       └─ (novos quartéis...) ────┘
-│ Maracajá             │
-└──────────────────────┘
-```
-
-O app abre a aba **Quartéis**, lê a lista de nomes da coluna **Aba** e baixa
-cada uma dessas abas. Se uma aba falhar (por exemplo, por nome digitado
-errado), as outras continuam aparecendo e o app mostra um aviso amarelo
-dizendo qual falhou.
-
-## 1. Criar a planilha a partir do modelo
-
-1. No Google Drive, clique em **Novo → Upload de arquivo** e envie
-   `Hidrantes CBMSC - Modelo v2.xlsx`.
-2. Abra o arquivo e clique em **Arquivo → Salvar como Planilhas Google**.
-   Daqui em diante, use só essa cópia em formato Google.
-3. Confira que **Quartéis** é a **primeira aba**. Se o nome de uma aba listada
-   não existir, o Google devolve a primeira aba no lugar dela. Sendo a
-   Quartéis, o app percebe o erro e avisa, em vez de duplicar hidrantes.
-
-O modelo já vem com:
-- os 21 hidrantes atuais;
-- os 3 de Araranguá que estão sem localização (eles ficam fora do mapa até
-  ganharem coordenadas);
-- a lista suspensa de **Condição**, com as cores.
-
-Revise a coluna Condição de cada hidrante.
-
-## 2. Compartilhar
-
-Em **Compartilhar**:
-
-- **Acesso geral**: "Qualquer pessoa com o link" → **Leitor**. O app precisa
-  disso para ler a planilha.
-- Adicione como **Editor** os e-mails dos responsáveis de cada quartel.
-
-## 3. Proteger as abas (cada quartel edita só a sua)
-
-Para cada aba de quartel: clique com o botão direito na aba →
-**Proteger página** → **Definir permissões** → "Restringir quem pode editar
-este intervalo" → deixe só você e os e-mails daquele quartel.
-
-Proteja também as abas **Quartéis** e **Instruções**, deixando só os
-administradores.
-
-## 4. Ligar o app à planilha
-
-O ID é o trecho do link entre `/d/` e `/edit`:
+## Estrutura
 
 ```
-https://docs.google.com/spreadsheets/d/1AbC...xYz/edit#gid=0
-                                       └── ID ──┘
+PLANILHA PAI (administrador estadual)            ID configurado no app (SHEET_ID)
+ aba "Batalhões"
+ ┌──────────┬─────────────┬──────────────────┬───────┐
+ │ Batalhão │ Cidade-sede │ Link da planilha │ Ativo │
+ ├──────────┼─────────────┼──────────────────┼───────┤
+ │ 17º BBM  │ Araranguá   │ https://docs...  │ Sim   │──> PLANILHA DO 17º BBM
+ │ 4º BBM   │ Criciúma    │ https://docs...  │ Não   │      ├─ Instruções
+ └──────────┴─────────────┴──────────────────┴───────┘      ├─ Hidrantes  ← o app lê esta aba
+                                                            └─ Cidades    (lista suspensa)
 ```
 
-Coloque o ID no início do script em `index.html`, faça commit e push:
+Ordem de leitura do app:
+1. Abre a planilha pai, na aba **Batalhões**.
+2. Para cada linha com **Ativo** diferente de "Não", segue o **Link da planilha**.
+3. Lê a aba **Hidrantes** de cada batalhão. Os batalhões são lidos ao mesmo
+   tempo.
 
-```js
-const SHEET_ID = '1AbC...xYz';
-```
+Se um batalhão tiver problema (link vazio, planilha não compartilhada ou aba
+Hidrantes ausente), os outros continuam aparecendo. O app mostra uma faixa
+amarela dizendo qual batalhão falhou e por quê.
 
-## Incluir um quartel novo
+No app, o filtro **Batalhão** aparece automaticamente quando há mais de um
+batalhão com hidrantes. Os filtros Cidade e Bairro passam a mostrar só as
+opções do batalhão escolhido.
 
-1. Botão direito numa aba de quartel → **Duplicar**. Renomeie, por exemplo,
-   para "Sombrio", e apague as linhas de hidrantes, mantendo o cabeçalho.
-2. Na aba **Quartéis**, escreva o nome da nova aba, **exatamente igual**.
-3. Proteja a nova aba (passo 3) e adicione os editores daquele quartel.
+## Modelos
 
-Não é preciso mexer no app.
+Os arquivos ficam na pasta `Hidrantes - Modelos Estaduais`:
 
-## Colunas
+| Arquivo | Uso |
+|---|---|
+| `Modelo - Planilha Batalhões.xlsx` | Planilha pai. Já criada. |
+| `Modelo - Planilha do Batalhão.xlsx` | Em branco. Enviar a cada batalhão novo. |
+| `17º BBM - Hidrantes.xlsx` | O 17º BBM já no formato novo. Já criada. |
+
+Para transformar um `.xlsx` em planilha Google: Google Drive → **Novo →
+Upload de arquivo**, abra o arquivo e use **Arquivo → Salvar como Planilhas
+Google**.
+
+## Incluir um batalhão (sem mexer no app)
+
+**Responsável do batalhão:**
+1. Recebe o `Modelo - Planilha do Batalhão.xlsx` e o converte em planilha
+   Google.
+2. Escreve as cidades do batalhão na aba **Cidades**. Elas alimentam a lista
+   suspensa da coluna Cidade.
+3. Cadastra os hidrantes na aba **Hidrantes**.
+4. Em **Compartilhar → Acesso geral**, escolhe "Qualquer pessoa com o link"
+   → **Leitor**, e adiciona o administrador estadual como **Editor**.
+5. Envia o link da planilha ao administrador.
+
+**Administrador estadual:**
+1. Na planilha pai, aba **Batalhões**, cria uma linha com o nome do batalhão,
+   a cidade-sede e o link. Pode ser o link completo da barra do navegador.
+2. Deixa **Ativo = Não** enquanto o batalhão ainda está preenchendo, e muda
+   para **Sim** quando estiver pronto. O batalhão aparece no app na próxima
+   abertura.
+
+## Regras para não quebrar a leitura
+
+- Planilha pai: a aba **Batalhões** deve ser a **primeira** e manter esse
+  nome. Não renomeie as colunas Batalhão, Link da planilha e Ativo.
+- Planilha do batalhão: a aba deve se chamar exatamente **Hidrantes**. Não
+  renomeie as colunas. O app as encontra pelo nome, então a ordem pode mudar.
+- Se a aba Hidrantes não existir, o Google devolve a primeira aba
+  (Instruções). O app percebe que não há coluna Coordenadas e avisa.
+- **Todas** as planilhas (pai e batalhões) precisam estar como "Qualquer
+  pessoa com o link → Leitor".
+
+## Colunas da aba Hidrantes
 
 | Coluna | Obrigatória | Observação |
 |---|---|---|
-| Cidade | sim | Nome completo, com acento. Aparece no filtro do app. Se ficar vazia, o app usa o nome da aba. |
+| Cidade | sim | Escolhida na lista (aba Cidades). Aparece no filtro do app. |
 | Bairro | não | Aparece no filtro de bairros. |
 | Endereço | sim | Rua e esquina/número. |
-| Coordenadas | sim | `-28.939028, -49.476444` (copiado do Google Maps) ou `28°56'02.7"S 49°29'00.4"W`. Sem coordenadas, o hidrante não aparece. |
+| Coordenadas | sim | `-28.939028, -49.476444` (copiado do Google Maps) ou `28°56'02.7"S 49°29'00.4"W`. Sem coordenadas, o hidrante não aparece no mapa. |
 | Ponto de Referência | não | |
 | Condição | sim | Boa (verde), Necessita reparo (laranja) ou Inoperante (preto). |
-| Estado Geral | não | Texto exibido como "Situação" no app. |
+| Estado Geral | não | Aparece como "Situação" no app. |
 | Vazão, Ações Realizadas, Providências | não | Texto livre. |
+| Data da Vistoria | não | Aparece como "Última vistoria" no app. |
 | Foto (link) | não | Link de foto no Google Drive (compartilhada por link). Aparece como "📷 Ver foto". |
-
-**Não renomeie as colunas.** O app as encontra pelo nome, então a ordem pode
-mudar, mas o nome não.
 
 ## Observações
 
-- Alterações na planilha aparecem no app na próxima vez que ele for aberto
+- Alterações nas planilhas aparecem no app na próxima vez que ele for aberto
   ou recarregado.
 - **Sem internet**, o app mostra a última lista baixada.
-- Os dados ficam visíveis a qualquer pessoa com o link da planilha. Não
-  coloque nomes, telefones ou informações restritas.
-- O histórico de quem alterou o quê fica em **Arquivo → Histórico de versões**.
+- Os dados ficam visíveis a qualquer pessoa com o link. Não coloque nomes,
+  telefones ou informações restritas.
+- O histórico de alterações de cada planilha fica em **Arquivo → Histórico
+  de versões**.
