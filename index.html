@@ -123,11 +123,11 @@
   .state-bad{background:var(--black-state);}
   .empty-msg{padding:20px 14px;font-size:13px;color:var(--muted);text-align:center;}
 
-  #banner{
+  #banner, #dataWarn{
     padding:8px 12px;font-size:12px;background:#fff8e1;color:#7a5b00;
     border-bottom:1px solid #f0e0a0;display:none;
   }
-  #banner.show{display:block;}
+  #banner.show, #dataWarn.show{display:block;}
 
   /* Instruções de instalação no iPhone */
   #iosInstall{
@@ -233,6 +233,7 @@
   </header>
 
   <div id="banner"></div>
+  <div id="dataWarn"></div>
 
   <div id="main">
     <div id="map"></div>
@@ -327,14 +328,17 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
 <script>
 /* =======================================================================
-   Fonte de dados: banco Supabase (veja SUPABASE.md).
-   O mapa é público; só gestores logados cadastram/editam hidrantes, e
-   apenas nas cidades da sua unidade (regras aplicadas no próprio banco).
-   Enquanto SUPABASE_URL/SUPABASE_ANON_KEY estiverem vazios, o app lê o
-   arquivo hidrantes.csv do repositório, como antes.
+   Fonte de dados, na ordem de prioridade:
+   1. Banco Supabase (veja SUPABASE.md), se SUPABASE_URL/ANON_KEY
+      estiverem preenchidos. Gestores logados cadastram pelo próprio app.
+   2. Planilha do Google (veja PLANILHA.md), se SHEET_ID estiver
+      preenchido. Cada quartel edita a sua aba direto na planilha.
+   3. Arquivo hidrantes.csv do repositório.
    ======================================================================= */
 const SUPABASE_URL = '';
 const SUPABASE_ANON_KEY = '';
+const SHEET_ID = '';             // o trecho entre /d/ e /edit no link da planilha
+const SHEET_INDEX_TAB = 'Quartéis';
 const CSV_URL = './hidrantes.csv';
 const CACHE_KEY = 'hidrantes-cache-v1';
 
@@ -366,27 +370,103 @@ function parseCSV(text) {
   return rows;
 }
 
-function csvToHydrants(text) {
-  const rows = parseCSV(text).filter(r => r.some(c => c && c.trim() !== ''));
-  const header = rows[0].map(h => h.trim().toLowerCase());
-  const idx = name => header.indexOf(name);
+/* Minúsculas e sem acentos, para comparar cabeçalhos e textos digitados por várias pessoas. */
+function norm(s) {
+  return String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '')
+    .toLowerCase().replace(/\s+/g, ' ').trim();
+}
+
+/* Nomes de coluna aceitos: hidrantes.csv, modelo da planilha e a planilha antiga. */
+const COLUNAS = {
+  cidade: ['cidade'],
+  bairro: ['bairro'],
+  endereco: ['endereco'],
+  coordenadas: ['coordenadas', 'coordenada geografica', 'coordenada'],
+  lat: ['lat', 'latitude'],
+  lng: ['lng', 'longitude'],
+  referencia: ['referencia', 'ponto de referencia'],
+  condicao: ['condicao'],
+  estado: ['estado', 'estado geral', 'estado geral do hidrante'],
+  vazao: ['vazao'],
+  acoes: ['acoes realizadas'],
+  alteracoes: ['alteracoes', 'providencias', 'providencias necessarias'],
+  link: ['link', 'localizacao'],
+  foto: ['foto', 'foto (link)']
+};
+
+/* Aceita "-28.939028, -49.476444" (Google Maps), "-28,939028; -49,476444"
+   e graus/minutos/segundos: 28°56'02.7"S 49°29'00.4"W. */
+function parseCoords(text) {
+  const s = String(text || '').trim();
+  if (!s) return null;
+  const dms = [...s.matchAll(/(\d+(?:[.,]\d+)?)\s*°\s*(?:(\d+(?:[.,]\d+)?)\s*['′’]\s*)?(?:(\d+(?:[.,]\d+)?)\s*(?:"|″|”|''|′′)\s*)?([NSLOEW])/gi)];
+  let lat, lng;
+  if (dms.length === 2) {
+    const val = m => {
+      const n = x => parseFloat((x || '0').replace(',', '.'));
+      const v = n(m[1]) + n(m[2]) / 60 + n(m[3]) / 3600;
+      return /[SOW]/i.test(m[4]) ? -v : v;
+    };
+    [lat, lng] = dms.map(val);
+  } else {
+    const nums = /^\s*-?\d+,\d+\s*[;\s]\s*-?\d+,\d+\s*$/.test(s)
+      ? s.split(/[;\s]+/).map(x => x.replace(',', '.'))
+      : s.match(/-?\d+(?:\.\d+)?/g);
+    if (!nums || nums.length !== 2) return null;
+    [lat, lng] = nums.map(Number);
+    // Sinal de menos esquecido: em SC latitude e longitude são sempre negativas.
+    if (lat > 25 && lat < 30 && lng > 48 && lng < 54) { lat = -lat; lng = -lng; }
+  }
+  if (!isFinite(lat) || !isFinite(lng) || Math.abs(lat) > 90 || Math.abs(lng) > 180) return null;
+  return { lat, lng };
+}
+
+function condicaoFrom(text, estado) {
+  const t = norm(text);
+  if (t === 'ok' || t === 'warn' || t === 'bad') return t;
+  if (/inoperante|nao funciona/.test(t)) return 'bad';
+  if (/reparo/.test(t)) return 'warn';
+  if (/^boa|^bom/.test(t)) return 'ok';
+  return stateClass(estado || '');
+}
+
+/* Converte linhas de CSV (cabeçalho + dados) em hidrantes. Linhas sem
+   coordenadas válidas são ignoradas. "cidadePadrao" é o nome da aba,
+   para planilhas sem coluna Cidade. */
+function rowsToHydrants(rows, cidadePadrao) {
+  if (!rows.length) return [];
+  const header = rows[0].map(norm);
+  const col = {};
+  for (const [campo, nomes] of Object.entries(COLUNAS)) col[campo] = header.findIndex(h => nomes.includes(h));
+  const get = (r, campo) => col[campo] >= 0 ? (r[col[campo]] || '').trim() : '';
+
   const out = [];
-  for (let i = 1; i < rows.length; i++) {
-    const r = rows[i];
-    const lat = parseFloat(r[idx('lat')]);
-    const lng = parseFloat(r[idx('lng')]);
-    if (isNaN(lat) || isNaN(lng)) continue;
+  for (const r of rows.slice(1)) {
+    const pos = col.coordenadas >= 0
+      ? parseCoords(get(r, 'coordenadas'))
+      : parseCoords(get(r, 'lat') + ', ' + get(r, 'lng'));
+    if (!pos) continue;
+    let endereco = get(r, 'endereco'), bairro = get(r, 'bairro');
+    // Planilha antiga: bairro na última linha da célula do endereço.
+    if (col.bairro < 0 && endereco.includes('\n')) {
+      const linhas = endereco.split('\n').map(l => l.trim()).filter(Boolean);
+      bairro = linhas.pop();
+      endereco = linhas.join(' ');
+    }
+    const estado = get(r, 'estado');
     out.push({
-      cidade: (r[idx('cidade')] || '').trim(),
-      bairro: (r[idx('bairro')] || '').trim(),
-      endereco: (r[idx('endereco')] || '').trim(),
-      lat, lng,
-      referencia: (r[idx('referencia')] || '').trim(),
-      condicao: stateClass(r[idx('estado')] || ''),
-      estado: (r[idx('estado')] || '').trim(),
-      vazao: (r[idx('vazao')] || '').trim(),
-      alteracoes: (r[idx('alteracoes')] || '').trim(),
-      link: (r[idx('link')] || '').trim()
+      cidade: get(r, 'cidade') || cidadePadrao || '',
+      bairro,
+      endereco: endereco.replace(/\s+/g, ' '),
+      lat: pos.lat, lng: pos.lng,
+      referencia: get(r, 'referencia').replace(/\s+/g, ' '),
+      condicao: condicaoFrom(get(r, 'condicao'), estado),
+      estado,
+      vazao: get(r, 'vazao'),
+      acoes: get(r, 'acoes'),
+      alteracoes: get(r, 'alteracoes'),
+      link: get(r, 'link') || mapsLink(pos.lat, pos.lng),
+      foto: get(r, 'foto')
     });
   }
   return out;
@@ -522,6 +602,7 @@ function renderMarkers(){
       <b>Referência:</b> ${esc(h.referencia)}<br>
       <b>Situação:</b> ${esc(h.estado)}<br>
       ${link ? `<a class="popup-link" href="${esc(link)}" target="_blank" rel="noopener">Abrir no Google Maps ↗</a>` : ''}
+      ${safeUrl(h.foto) ? `<br><a class="popup-link" href="${esc(h.foto)}" target="_blank" rel="noopener">📷 Ver foto ↗</a>` : ''}
       ${h.atualizado_em ? `<span class="popup-meta">Atualizado em ${new Date(h.atualizado_em).toLocaleDateString('pt-BR')}</span>` : ''}
       ${canEdit(h) ? `<button type="button" class="popup-edit" data-id="${esc(h.id)}">✏️ Editar</button>` : ''}
     `);
@@ -694,11 +775,51 @@ async function fetchHydrants(){
     }
     return all;
   }
-  const res = await fetch(CSV_URL + '?t=' + Date.now(), { cache: 'no-store' });
-  if(!res.ok) throw new Error('HTTP ' + res.status);
-  const list = csvToHydrants(await res.text());
+  if(SHEET_ID) return fetchSheet();
+  const list = rowsToHydrants(await fetchCSV(CSV_URL));
   if(list.length === 0) throw new Error('CSV vazio ou em formato inesperado');
   return list;
+}
+
+async function fetchCSV(url){
+  const res = await fetch(url + (url.includes('?') ? '&' : '?') + 't=' + Date.now(), { cache: 'no-store' });
+  if(!res.ok) throw new Error('HTTP ' + res.status);
+  const text = await res.text();
+  // Planilha não compartilhada: o Google devolve uma página HTML no lugar do CSV.
+  if(/^\s*</.test(text)) throw new Error('a planilha não está compartilhada como "qualquer pessoa com o link"');
+  return parseCSV(text).filter(r => r.some(c => c && c.trim() !== ''));
+}
+
+function sheetTabUrl(tab){
+  return `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&headers=1&sheet=${encodeURIComponent(tab)}`;
+}
+
+/* Planilha do Google: a aba-índice lista as abas dos quartéis; cada uma é
+   baixada em paralelo. Uma aba com problema não impede as outras. */
+async function fetchSheet(){
+  const indice = await fetchCSV(sheetTabUrl(SHEET_INDEX_TAB));
+  const colAba = indice.length ? indice[0].map(norm).indexOf('aba') : -1;
+  if(colAba < 0) throw new Error(`aba "${SHEET_INDEX_TAB}" não encontrada na planilha`);
+  const abas = [...new Set(indice.slice(1).map(r => (r[colAba] || '').trim()).filter(Boolean))];
+
+  const results = await Promise.allSettled(abas.map(async (aba) => {
+    const rows = await fetchCSV(sheetTabUrl(aba));
+    // Nome de aba inexistente faz o Google devolver outra aba; o cabeçalho denuncia.
+    const header = rows.length ? rows[0].map(norm) : [];
+    if(!header.some(h => COLUNAS.coordenadas.includes(h) || h === 'lat'))
+      throw new Error('aba não encontrada ou sem a coluna Coordenadas');
+    return rowsToHydrants(rows, aba);
+  }));
+
+  const falhas = [];
+  let all = [];
+  results.forEach((r, i) => {
+    if(r.status === 'fulfilled') all = all.concat(r.value);
+    else falhas.push(`${abas[i]} (${r.reason.message})`);
+  });
+  if(!all.length) throw new Error(falhas.length ? 'nenhuma aba pôde ser lida: ' + falhas.join('; ') : 'planilha sem hidrantes');
+  loadWarning = falhas.length ? 'Algumas abas da planilha não puderam ser lidas: ' + falhas.join('; ') + '.' : '';
+  return all;
 }
 
 /* Última lista baixada fica no aparelho, para o mapa funcionar sem internet. */
@@ -713,10 +834,16 @@ function readCache(){
 }
 
 let firstLoad = true;
+let loadWarning = '';
 async function loadData(){
   try {
+    loadWarning = '';
     HIDRANTES = await fetchHydrants();
     saveCache(HIDRANTES);
+    // Faixa própria: o banner principal é reaproveitado pelas mensagens de localização.
+    const dataWarn = document.getElementById('dataWarn');
+    dataWarn.textContent = '⚠️ ' + loadWarning;
+    dataWarn.classList.toggle('show', !!loadWarning);
   } catch (err) {
     const cached = readCache();
     if(!cached || !cached.itens || !cached.itens.length){
