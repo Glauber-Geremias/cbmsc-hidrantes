@@ -17,6 +17,7 @@
 <meta name="apple-mobile-web-app-title" content="Hidrantes">
 
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css" />
 <style>
   :root{
     --red:#c0392b;
@@ -122,6 +123,22 @@
   .state-warn{background:var(--amber);}
   .state-bad{background:var(--black-state);}
   .empty-msg{padding:20px 14px;font-size:13px;color:var(--muted);text-align:center;}
+  .more-btn{
+    display:block;width:calc(100% - 24px);margin:10px 12px 14px;padding:9px;
+    background:#fff;color:var(--red-dark);border:1px solid var(--red);border-radius:6px;
+    font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;
+  }
+
+  /* Agrupamento de marcadores: vermelho CBMSC, para não confundir com as cores de condição */
+  .hcluster{
+    background:rgba(192,57,43,.25);border-radius:50%;
+    display:flex;align-items:center;justify-content:center;
+  }
+  .hcluster div{
+    background:var(--red);color:#fff;font-weight:700;font-size:12px;border:2px solid #fff;
+    border-radius:50%;display:flex;align-items:center;justify-content:center;
+    box-shadow:0 1px 4px rgba(0,0,0,.4);
+  }
 
   #banner, #dataWarn{
     padding:8px 12px;font-size:12px;background:#fff8e1;color:#7a5b00;
@@ -326,6 +343,7 @@
 </div>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
 <script>
 /* =======================================================================
@@ -537,7 +555,40 @@ const hydrantIcon = (cls) => L.divIcon({
 });
 const userIcon = L.divIcon({ className:'', html:'<div class="user-dot"></div>', iconSize:[16,16], iconAnchor:[8,8] });
 
-const markersLayer = L.layerGroup().addTo(map);
+/* Com zoom afastado, hidrantes próximos viram um círculo com a quantidade;
+   a partir do nível de rua (16) todos aparecem individualmente. Se a
+   extensão não carregar (offline na primeira abertura), usa camada simples. */
+const markersLayer = (L.markerClusterGroup ? L.markerClusterGroup({
+  maxClusterRadius: 50,
+  disableClusteringAtZoom: 16,
+  showCoverageOnHover: false,
+  spiderfyOnMaxZoom: false,
+  iconCreateFunction: (cluster) => {
+    const n = cluster.getChildCount();
+    const size = n < 10 ? 34 : n < 100 ? 40 : 48;
+    return L.divIcon({
+      html: `<div style="width:${size - 8}px;height:${size - 8}px">${n}</div>`,
+      className: 'hcluster',
+      iconSize: [size, size]
+    });
+  }
+}) : L.layerGroup()).addTo(map);
+
+/* Centraliza no hidrante e abre o popup, mesmo que ele esteja dentro de um grupo. */
+function focusHydrant(h){
+  if(!h._marker) return;
+  if(markersLayer.zoomToShowLayer){
+    map.setView([h.lat, h.lng], Math.max(map.getZoom(), 17), { animate: false });
+    markersLayer.zoomToShowLayer(h._marker, () => h._marker.openPopup());
+  } else {
+    map.setView([h.lat, h.lng], 17, { animate: true });
+    h._marker.openPopup();
+  }
+}
+
+// A lista mostra só os primeiros; o mapa continua com todos.
+const LIST_PAGE = 30;
+let listLimit = LIST_PAGE;
 
 let HIDRANTES = [];
 let userMarker = null;
@@ -652,12 +703,13 @@ function renderList(){
     panelTitle.textContent = `Hidrantes (${items.length})`;
   }
 
+  const scroll = listEl.scrollTop; // "Mostrar mais" redesenha a lista sem voltar ao topo
   listEl.innerHTML = '';
   if(items.length === 0){
     listEl.innerHTML = '<div class="empty-msg">Nenhum hidrante encontrado para este filtro.</div>';
     return;
   }
-  items.forEach((h, rank) => {
+  items.slice(0, listLimit).forEach((h, rank) => {
     const cls = h.condicao;
     const card = document.createElement('div');
     card.className = 'hcard';
@@ -674,16 +726,31 @@ function renderList(){
       </div>
     `;
     card.addEventListener('click', () => {
-      map.setView([h.lat, h.lng], 17, { animate: true });
-      h._marker.openPopup();
+      focusHydrant(h);
       document.querySelectorAll('.hcard').forEach(c => c.classList.remove('active'));
       card.classList.add('active');
     });
     listEl.appendChild(card);
   });
+
+  const restantes = items.length - listLimit;
+  if(restantes > 0){
+    const more = document.createElement('button');
+    more.type = 'button';
+    more.className = 'more-btn';
+    more.textContent = `Mostrar mais (${restantes} restante${restantes > 1 ? 's' : ''})`;
+    more.addEventListener('click', () => {
+      listLimit += LIST_PAGE;
+      renderList();
+    });
+    listEl.appendChild(more);
+  }
+  listEl.scrollTop = scroll;
 }
 
 function refreshView(){
+  listLimit = LIST_PAGE;
+  listEl.scrollTop = 0;
   renderMarkers();
   renderList();
 }
@@ -709,6 +776,8 @@ bairroSel.addEventListener('change', () => {
 /* ---------- Geolocalização ---------- */
 function setUserLocation(lat, lng, label){
   userLatLng = { lat, lng };
+  listLimit = LIST_PAGE;
+  listEl.scrollTop = 0;
   if(userMarker) map.removeLayer(userMarker);
   userMarker = L.marker([lat, lng], { icon: userIcon, zIndexOffset: 1000 })
     .addTo(map).bindPopup(label || 'Você está aqui');
@@ -1100,10 +1169,7 @@ hydrantForm.addEventListener('submit', async (e) => {
     closeModal();
     await loadData();
     const saved = HIDRANTES.find(x => x.id === data[0].id);
-    if(saved && saved._marker){
-      map.setView([saved.lat, saved.lng], 17);
-      saved._marker.openPopup();
-    }
+    if(saved) focusHydrant(saved);
   } catch (err) {
     showError(formError, 'Não foi possível salvar: ' + err.message);
   } finally {
