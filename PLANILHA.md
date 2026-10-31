@@ -24,7 +24,7 @@ dizendo qual falhou.
 ## 1. Criar a planilha a partir do modelo
 
 1. No Google Drive, clique em **Novo → Upload de arquivo** e envie
-   `Hidrantes CBMSC - Modelo.xlsx`.
+   `Hidrantes CBMSC - Modelo v2.xlsx`.
 2. Abra o arquivo e clique em **Arquivo → Salvar como Planilhas Google**.
    Daqui em diante, use só essa cópia em formato Google.
 3. Confira que **Quartéis** é a **primeira aba**. Se o nome de uma aba listada
