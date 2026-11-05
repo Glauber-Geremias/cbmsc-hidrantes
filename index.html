@@ -262,7 +262,6 @@
       <div id="filters">
         <select id="batalhaoFilter" style="display:none;"><option value="">Todos os batalhões</option></select>
         <select id="cidadeFilter"><option value="">Todas as cidades</option></select>
-        <select id="bairroFilter"><option value="">Todos os bairros</option></select>
       </div>
       <div id="list"><div class="empty-msg">Carregando hidrantes…</div></div>
     </div>
@@ -597,7 +596,6 @@ let pickMode = null; // null | 'user' (minha localização) | 'form' (posição 
 let gestor = null;   // { nome, unidade, cidades, admin } quando logado
 let filterBatalhao = '';
 let filterCidade = '';
-let filterBairro = '';
 
 const listEl = document.getElementById('list');
 const panelTitle = document.getElementById('panelTitle');
@@ -605,7 +603,6 @@ const statusBox = document.getElementById('statusBox');
 const banner = document.getElementById('banner');
 const batalhaoSel = document.getElementById('batalhaoFilter');
 const cidadeSel = document.getElementById('cidadeFilter');
-const bairroSel = document.getElementById('bairroFilter');
 const locateBtn = document.getElementById('locateBtn');
 const pickBtn = document.getElementById('pickBtn');
 const panelEl = document.getElementById('panel');
@@ -623,8 +620,7 @@ panelToggle.addEventListener('click', () => {
 function filteredHydrants(){
   return HIDRANTES.filter(h =>
     (!filterBatalhao || h.batalhao === filterBatalhao) &&
-    (!filterCidade || h.cidade === filterCidade) &&
-    (!filterBairro || h.bairro === filterBairro)
+    (!filterCidade || h.cidade === filterCidade)
   );
 }
 
@@ -635,23 +631,15 @@ function populateFilters(){
   batalhaoSel.style.display = batalhoes.length > 1 ? '' : 'none';
   batalhaoSel.innerHTML = '<option value="">Todos os batalhões</option>' +
     batalhoes.map(b => `<option value="${esc(b)}">${esc(b)}</option>`).join('');
-  if (filterBatalhao && !batalhoes.includes(filterBatalhao)) { filterBatalhao = ''; filterCidade = ''; filterBairro = ''; }
+  if (filterBatalhao && !batalhoes.includes(filterBatalhao)) { filterBatalhao = ''; filterCidade = ''; }
   batalhaoSel.value = filterBatalhao;
 
   const cidades = [...new Set(HIDRANTES.filter(h => !filterBatalhao || h.batalhao === filterBatalhao)
     .map(h => h.cidade).filter(Boolean))].sort();
   cidadeSel.innerHTML = '<option value="">Todas as cidades</option>' +
     cidades.map(c => `<option value="${esc(c)}">${esc(c)}</option>`).join('');
-  if (filterCidade && !cidades.includes(filterCidade)) { filterCidade = ''; filterBairro = ''; }
+  if (filterCidade && !cidades.includes(filterCidade)) filterCidade = '';
   cidadeSel.value = filterCidade;
-
-  const bairros = [...new Set(HIDRANTES.filter(h =>
-      (!filterBatalhao || h.batalhao === filterBatalhao) && (!filterCidade || h.cidade === filterCidade))
-    .map(h => h.bairro).filter(Boolean))].sort();
-  bairroSel.innerHTML = '<option value="">Todos os bairros</option>' +
-    bairros.map(b => `<option value="${esc(b)}">${esc(b)}</option>`).join('');
-  if (filterBairro && !bairros.includes(filterBairro)) filterBairro = '';
-  bairroSel.value = filterBairro;
 }
 
 function canEdit(h){
@@ -758,18 +746,11 @@ function refreshView(){
 batalhaoSel.addEventListener('change', () => {
   filterBatalhao = batalhaoSel.value;
   filterCidade = '';
-  filterBairro = '';
   populateFilters();
   refreshView();
 });
 cidadeSel.addEventListener('change', () => {
   filterCidade = cidadeSel.value;
-  filterBairro = '';
-  populateFilters();
-  refreshView();
-});
-bairroSel.addEventListener('change', () => {
-  filterBairro = bairroSel.value;
   refreshView();
 });
 
@@ -875,12 +856,22 @@ async function fetchHydrants(){
   throw new Error('nenhuma fonte de dados configurada (SHEET_ID ou Supabase)');
 }
 
+const NAO_COMPARTILHADA = 'a planilha não está compartilhada como "qualquer pessoa com o link"';
+
 async function fetchCSV(url){
-  const res = await fetch(url + (url.includes('?') ? '&' : '?') + 't=' + Date.now(), { cache: 'no-store' });
+  let res;
+  try {
+    res = await fetch(url + (url.includes('?') ? '&' : '?') + 't=' + Date.now(), { cache: 'no-store' });
+  } catch (e) {
+    // Planilha restrita: o Google pede login e o navegador bloqueia a resposta.
+    throw new Error(navigator.onLine === false ? 'sem conexão' : NAO_COMPARTILHADA + ' (ou link incorreto)');
+  }
+  if(res.status === 401 || res.status === 403) throw new Error(NAO_COMPARTILHADA);
+  if(res.status === 404) throw new Error('planilha não encontrada (link incorreto ou planilha apagada)');
   if(!res.ok) throw new Error('HTTP ' + res.status);
   const text = await res.text();
   // Planilha não compartilhada: o Google devolve uma página HTML no lugar do CSV.
-  if(/^\s*</.test(text)) throw new Error('a planilha não está compartilhada como "qualquer pessoa com o link"');
+  if(/^\s*</.test(text)) throw new Error(NAO_COMPARTILHADA);
   return parseCSV(text).filter(r => r.some(c => c && c.trim() !== ''));
 }
 
@@ -978,7 +969,9 @@ async function loadData(){
   if(firstLoad){
     firstLoad = false;
     if(HIDRANTES.length){
-      map.fitBounds(L.latLngBounds(HIDRANTES.map(h => [h.lat, h.lng])), { padding: [40,40], maxZoom: 14 });
+      // Sem animação: se o GPS responder durante a animação, o foco na
+      // posição do usuário seria descartado e o mapa ficaria afastado.
+      map.fitBounds(L.latLngBounds(HIDRANTES.map(h => [h.lat, h.lng])), { padding: [40,40], maxZoom: 14, animate: false });
     }
     locateUser();
   }
