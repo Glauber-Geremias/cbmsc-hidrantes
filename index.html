@@ -41,11 +41,17 @@
     padding:10px 14px;
     display:flex;
     align-items:center;
-    gap:10px;
+    gap:10px 16px;
     box-shadow:0 2px 6px rgba(0,0,0,.25);
     z-index:1000;
     flex-wrap:wrap;
   }
+  header .brand{display:flex;align-items:center;gap:10px;min-width:0;}
+  /* Botões numa linha, alinhados pelo topo; a situação da localização logo abaixo */
+  header .actions{
+    margin-left:auto;display:flex;flex-direction:column;align-items:flex-end;gap:5px;
+  }
+  header .btns{display:flex;align-items:flex-start;justify-content:flex-end;gap:8px;flex-wrap:wrap;}
   header .logo{
     width:38px;height:38px;border-radius:50%;
     background:#fff;color:var(--red-dark);
@@ -54,10 +60,7 @@
   }
   header h1{font-size:15px;margin:0;line-height:1.2;}
   header p{font-size:11px;margin:0;opacity:.9;}
-  header .status{
-    margin-left:auto;font-size:11px;text-align:right;opacity:.95;
-    display:flex;flex-direction:column;gap:2px;
-  }
+  header .status{font-size:11px;text-align:right;opacity:.95;line-height:1.35;}
   header button{
     background:#fff;color:var(--red-dark);border:none;border-radius:6px;
     padding:6px 10px;font-size:12px;font-weight:600;cursor:pointer;
@@ -230,23 +233,32 @@
     #map{order:1;}
     header h1{font-size:13.5px;}
     header p{font-size:10px;}
+    header .actions{width:100%;margin-left:0;align-items:stretch;}
+    header .btns button{flex:1 1 140px;justify-content:center;padding:8px 10px;font-size:12.5px;}
+    header .status{text-align:center;font-size:11.5px;}
   }
 </style>
 </head>
 <body>
 <div id="app">
   <header>
-    <div class="logo">🚒</div>
-    <div>
-      <h1>Hidrantes — CBMSC</h1>
-      <p id="subtitle">Corpo de Bombeiros Militar de Santa Catarina</p>
+    <div class="brand">
+      <div class="logo">🚒</div>
+      <div>
+        <h1>Hidrantes — CBMSC</h1>
+        <p id="subtitle">Corpo de Bombeiros Militar de Santa Catarina</p>
+      </div>
     </div>
-    <div class="status" id="statusBox">Carregando dados…</div>
-    <button id="locateBtn" disabled>📍 Minha localização</button>
-    <button id="pickBtn" disabled>📌 Marcar no mapa</button>
-    <button id="addBtn" style="display:none;">➕ Novo hidrante</button>
-    <button id="gestorBtn" style="display:none;">🔐 Gestor</button>
-    <button id="installBtn" style="display:none;">⬇️ Instalar app</button>
+    <div class="actions">
+      <div class="btns">
+        <button id="locateBtn" disabled>📍 Minha localização</button>
+        <button id="pickBtn" disabled>📌 Marcar no mapa</button>
+        <button id="addBtn" style="display:none;">➕ Novo hidrante</button>
+        <button id="gestorBtn" style="display:none;">🔐 Gestor</button>
+        <button id="installBtn" style="display:none;">⬇️ Instalar app</button>
+      </div>
+      <div class="status" id="statusBox">Carregando dados…</div>
+    </div>
   </header>
 
   <div id="banner"></div>
@@ -766,7 +778,7 @@ function setUserLocation(lat, lng, label){
   if(pool.length){
     const nearest = pool.map(h => ({...h, dist: haversine(lat, lng, h.lat, h.lng)}))
                          .sort((a,b) => a.dist - b.dist)[0];
-    statusBox.innerHTML = `Localização definida<br>Hidrante mais próximo: <b>${fmtDist(nearest.dist)}</b>`;
+    statusBox.innerHTML = `Localização definida · Hidrante mais próximo: <b>${fmtDist(nearest.dist)}</b>`;
     const bounds = L.latLngBounds([[lat, lng]]);
     pool.slice(0).sort((a,b) => haversine(lat,lng,a.lat,a.lng) - haversine(lat,lng,b.lat,b.lng))
       .slice(0,5).forEach(h => bounds.extend([h.lat, h.lng]));
