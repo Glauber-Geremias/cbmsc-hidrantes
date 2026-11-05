@@ -791,6 +791,7 @@ function setUserLocation(lat, lng, label){
 
 function startPick(mode){
   pickMode = mode;
+  map.closePopup(); // um popup aberto "engoliria" o toque de marcação
   document.getElementById('map').style.cursor = 'crosshair';
   banner.textContent = mode === 'form'
     ? 'Toque/clique no mapa no local exato do hidrante.'
