@@ -168,6 +168,8 @@
     background:rgba(192,57,43,.25);border-radius:50%;
     display:flex;align-items:center;justify-content:center;
   }
+  .hcluster.scluster{background:rgba(31,111,178,.25);border-radius:6px;}
+  .hcluster.scluster div{background:var(--blue);border-radius:6px;}
   .hcluster div{
     background:var(--red);color:#fff;font-weight:700;font-size:12px;border:2px solid #fff;
     border-radius:50%;display:flex;align-items:center;justify-content:center;
@@ -686,27 +688,30 @@ const saudeIcon = (h24) => L.divIcon({
 });
 const userIcon = L.divIcon({ className:'', html:'<div class="user-dot"></div>', iconSize:[16,16], iconAnchor:[8,8] });
 
-/* Com zoom afastado, hidrantes próximos viram um círculo com a quantidade;
+/* Com zoom afastado, pontos próximos viram um círculo com a quantidade;
    a partir do nível de rua (16) todos aparecem individualmente. Se a
    extensão não carregar (offline na primeira abertura), usa camada simples. */
-const markersLayer = (L.markerClusterGroup ? L.markerClusterGroup({
-  maxClusterRadius: 50,
-  disableClusteringAtZoom: 16,
-  showCoverageOnHover: false,
-  spiderfyOnMaxZoom: false,
-  iconCreateFunction: (cluster) => {
-    const n = cluster.getChildCount();
-    const size = n < 10 ? 34 : n < 100 ? 40 : 48;
-    return L.divIcon({
-      html: `<div style="width:${size - 8}px;height:${size - 8}px">${n}</div>`,
-      className: 'hcluster',
-      iconSize: [size, size]
-    });
-  }
-}) : L.layerGroup()).addTo(map);
-
-// Unidades de saúde são poucas: camada simples, sempre por cima dos hidrantes.
-const saudeLayer = L.layerGroup().addTo(map);
+function clusterLayer(className){
+  if(!L.markerClusterGroup) return L.layerGroup();
+  return L.markerClusterGroup({
+    maxClusterRadius: 50,
+    disableClusteringAtZoom: 16,
+    showCoverageOnHover: false,
+    spiderfyOnMaxZoom: false,
+    iconCreateFunction: (cluster) => {
+      const n = cluster.getChildCount();
+      const size = n < 10 ? 34 : n < 100 ? 40 : 48;
+      return L.divIcon({
+        html: `<div style="width:${size - 8}px;height:${size - 8}px">${n}</div>`,
+        className,
+        iconSize: [size, size]
+      });
+    }
+  });
+}
+const markersLayer = clusterLayer('hcluster').addTo(map);
+// Unidades de saúde: agrupamento próprio (azul), separado dos hidrantes.
+const saudeLayer = clusterLayer('hcluster scluster').addTo(map);
 
 /* Camadas visíveis, ligadas/desligadas pelos botões do cabeçalho.
    As duas começam ligadas a cada abertura do app. */
@@ -723,14 +728,10 @@ layerBtns.forEach(b => b.addEventListener('click', () => {
 /* Centraliza no ponto e abre o popup, mesmo que ele esteja dentro de um grupo. */
 function focusHydrant(h){
   if(!h._marker) return;
-  if(h.kind === 'saude'){
-    map.setView([h.lat, h.lng], Math.max(map.getZoom(), 16), { animate: false });
-    h._marker.openPopup();
-    return;
-  }
-  if(markersLayer.zoomToShowLayer){
+  const layer = h.kind === 'saude' ? saudeLayer : markersLayer;
+  if(layer.zoomToShowLayer){
     map.setView([h.lat, h.lng], Math.max(map.getZoom(), 17), { animate: false });
-    markersLayer.zoomToShowLayer(h._marker, () => h._marker.openPopup());
+    layer.zoomToShowLayer(h._marker, () => h._marker.openPopup());
   } else {
     map.setView([h.lat, h.lng], 17, { animate: true });
     h._marker.openPopup();
