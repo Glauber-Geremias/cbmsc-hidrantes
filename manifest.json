@@ -1,7 +1,7 @@
 {
-  "name": "Hidrantes CBMSC",
-  "short_name": "Hidrantes",
-  "description": "Localização de hidrantes e distância até o mais próximo - Corpo de Bombeiros Militar de SC",
+  "name": "Atalho Operacional",
+  "short_name": "Atalho Op",
+  "description": "Hidrantes e unidades de saúde mais próximos - Corpo de Bombeiros Militar de SC",
   "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",
