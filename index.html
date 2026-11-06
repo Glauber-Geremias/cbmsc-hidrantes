@@ -26,6 +26,7 @@
     --amber:#d68910;
     --black-state:#1c1c1c;
     --gray:#7f8c8d;
+    --blue:#1f6fb2;
     --bg:#f4f4f4;
     --card:#ffffff;
     --text:#222;
@@ -126,6 +127,33 @@
   .state-warn{background:var(--amber);}
   .state-bad{background:var(--black-state);}
   .empty-msg{padding:20px 14px;font-size:13px;color:var(--muted);text-align:center;}
+  /* Unidades de saúde (hospitais, UPAs): azul, para não confundir com hidrantes */
+  .hcard.saude .rank{background:var(--blue);}
+  .hcard.saude.active{background:#eaf2fb;border-left-color:var(--blue);}
+  .h24-badge{font-size:10.5px;font-weight:700;padding:2px 6px;border-radius:10px;background:#d5f0df;color:#1e6b41;}
+  .h24-badge.no{background:#eee;color:#777;}
+  .popup-badge.saude{background:var(--blue);}
+  .popup-badge.h24{background:var(--green);}
+  .popup-badge.no24{background:#999;}
+  .popup-actions{display:flex;gap:6px;margin-top:8px;flex-wrap:wrap;}
+  .popup-btn{
+    display:inline-block;padding:6px 10px;border-radius:6px;font-size:12px;font-weight:700;
+    text-decoration:none;color:#fff !important;background:var(--blue);
+  }
+  .popup-btn.call{background:var(--green);}
+
+  /* Liga/desliga camadas, no canto do mapa */
+  .layer-toggle{
+    display:flex;gap:4px;background:#fff;border-radius:8px;padding:3px;
+    box-shadow:0 1px 5px rgba(0,0,0,.35);
+  }
+  .layer-toggle button{
+    border:none;border-radius:6px;padding:6px 9px;font-family:inherit;font-size:12px;font-weight:700;
+    cursor:pointer;background:#eee;color:#888;
+  }
+  .layer-toggle button.on[data-layer="h"]{background:var(--red);color:#fff;}
+  .layer-toggle button.on[data-layer="s"]{background:var(--blue);color:#fff;}
+
   .more-btn{
     display:block;width:calc(100% - 24px);margin:10px 12px 14px;padding:9px;
     background:#fff;color:var(--red-dark);border:1px solid var(--red);border-radius:6px;
@@ -378,6 +406,7 @@ const SUPABASE_ANON_KEY = '';
 const SHEET_ID = '1GwXKAi-51_34cBkiFNm4YnAqXTIWWBqSjVU109rOIbg'; // planilha pai: trecho entre /d/ e /edit do link
 const SHEET_INDEX_TAB = 'Batalhões';  // aba da planilha pai com a lista de batalhões
 const BATALHAO_TAB = 'Hidrantes';     // aba lida em cada planilha de batalhão
+const SAUDE_TAB = 'Saúde';            // aba opcional com hospitais/UPAs do batalhão
 const CACHE_KEY = 'hidrantes-cache-v1';
 
 const USE_SUPABASE = !!(SUPABASE_URL && SUPABASE_ANON_KEY);
@@ -513,6 +542,63 @@ function rowsToHydrants(rows, cidadePadrao) {
   return out;
 }
 
+/* ---------- Unidades de saúde (aba "Saúde" de cada batalhão) ---------- */
+const COLUNAS_SAUDE = {
+  cidade: ['cidade'],
+  nome: ['nome', 'unidade', 'nome da unidade'],
+  tipo: ['tipo'],
+  bairro: ['bairro'],
+  endereco: ['endereco'],
+  coordenadas: ['coordenadas', 'coordenada'],
+  telefone: ['telefone'],
+  h24: ['atendimento 24h', 'atendimento 24 horas', '24h', '24 horas'],
+  acesso: ['acesso da ambulancia', 'acesso'],
+  ambulancia: ['recebe ambulancia'],
+  ativo: ['ativo']
+};
+
+/* Só entram tipos que recebem ambulância. Outros tipos (UBS, posto) são ignorados. */
+function tipoSaude(t){
+  const n = norm(t);
+  if (/^hospital/.test(n)) return 'Hospital';
+  if (/^upa\b/.test(n)) return 'UPA';
+  if (/pronto.?atendimento/.test(n)) return 'Pronto Atendimento';
+  if (/pronto.?socorro/.test(n)) return 'Pronto-socorro';
+  return '';
+}
+
+function rowsToSaude(rows){
+  if (!rows.length) return [];
+  const header = rows[0].map(norm);
+  const col = {};
+  for (const [campo, nomes] of Object.entries(COLUNAS_SAUDE)) col[campo] = header.findIndex(h => nomes.includes(h));
+  // Aba inexistente: o Google devolve a primeira aba da planilha, sem estas colunas.
+  if (col.nome < 0 || col.tipo < 0 || col.coordenadas < 0) return [];
+  const get = (r, campo) => col[campo] >= 0 ? (r[col[campo]] || '').trim() : '';
+  const out = [];
+  for (const r of rows.slice(1)) {
+    const tipo = tipoSaude(get(r, 'tipo'));
+    const pos = parseCoords(get(r, 'coordenadas'));
+    if (!tipo || !pos || !get(r, 'nome')) continue;
+    if (/^nao/.test(norm(get(r, 'ativo'))) || /^nao/.test(norm(get(r, 'ambulancia')))) continue;
+    const h24 = norm(get(r, 'h24'));
+    out.push({
+      kind: 'saude',
+      id: 's' + out.length,
+      nome: get(r, 'nome').replace(/\s+/g, ' '),
+      tipo,
+      cidade: get(r, 'cidade'),
+      bairro: get(r, 'bairro'),
+      endereco: get(r, 'endereco').replace(/\s+/g, ' '),
+      lat: pos.lat, lng: pos.lng,
+      telefone: get(r, 'telefone'),
+      h24: /^sim/.test(h24) ? true : /^nao/.test(h24) ? false : null,
+      acesso: get(r, 'acesso')
+    });
+  }
+  return out;
+}
+
 /* ---------- Utilidades ---------- */
 function haversine(lat1, lon1, lat2, lon2){
   const R = 6371000;
@@ -545,6 +631,17 @@ function safeUrl(u){
 function mapsLink(lat, lng){
   return `https://www.google.com/maps?q=${lat},${lng}`;
 }
+/* Abre a navegação (Google Maps ou o app de mapas do celular) até o ponto. */
+function routeLink(lat, lng){
+  return `https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}`;
+}
+function telLink(t){
+  let d = String(t || '').replace(/[^\d+]/g, '').replace(/^0+/, '');
+  if (d.length < 8) return '';
+  // DDD + número (10 ou 11 dígitos): formato internacional funciona em qualquer operadora.
+  if (!d.startsWith('+') && (d.length === 10 || d.length === 11)) d = '+55' + d;
+  return 'tel:' + d;
+}
 
 /* ---------- Mapa ---------- */
 const map = L.map('map', { zoomControl: true }).setView([-28.9357, -49.4864], 12);
@@ -572,6 +669,16 @@ const hydrantIcon = (cls) => L.divIcon({
   iconAnchor: [13,26],
   popupAnchor: [0,-24]
 });
+/* Unidade de saúde: quadrado azul com cruz branca. Mais claro quando não é 24h. */
+const saudeIcon = (h24) => L.divIcon({
+  className: '',
+  html: `<div style="width:26px;height:26px;border-radius:6px;background:${h24 === false ? '#7f9db9' : '#1f6fb2'};
+          border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center;">
+          <svg viewBox="0 0 24 24" width="16" height="16"><path fill="#fff" d="M9 3h6v6h6v6h-6v6H9v-6H3V9h6z"/></svg></div>`,
+  iconSize: [26,26],
+  iconAnchor: [13,13],
+  popupAnchor: [0,-12]
+});
 const userIcon = L.divIcon({ className:'', html:'<div class="user-dot"></div>', iconSize:[16,16], iconAnchor:[8,8] });
 
 /* Com zoom afastado, hidrantes próximos viram um círculo com a quantidade;
@@ -593,9 +700,39 @@ const markersLayer = (L.markerClusterGroup ? L.markerClusterGroup({
   }
 }) : L.layerGroup()).addTo(map);
 
-/* Centraliza no hidrante e abre o popup, mesmo que ele esteja dentro de um grupo. */
+// Unidades de saúde são poucas: camada simples, sempre por cima dos hidrantes.
+const saudeLayer = L.layerGroup().addTo(map);
+
+/* Camadas visíveis. As duas começam ligadas a cada abertura do app. */
+const showLayer = { h: true, s: true };
+const LayerToggle = L.Control.extend({
+  options: { position: 'topright' },
+  onAdd(){
+    const div = L.DomUtil.create('div', 'layer-toggle');
+    const btn = (k, txt) => `<button type="button" data-layer="${k}" class="${showLayer[k] ? 'on' : ''}" aria-pressed="${showLayer[k]}">${txt}</button>`;
+    div.innerHTML = btn('h', '🚒 Hidrantes') + btn('s', '🏥 Saúde');
+    L.DomEvent.disableClickPropagation(div);
+    div.querySelectorAll('button').forEach(b => b.addEventListener('click', () => {
+      const k = b.dataset.layer;
+      showLayer[k] = !showLayer[k];
+      b.classList.toggle('on', showLayer[k]);
+      b.setAttribute('aria-pressed', showLayer[k]);
+      refreshView();
+    }));
+    this._div = div;
+    return div;
+  }
+});
+const layerToggle = new LayerToggle();
+
+/* Centraliza no ponto e abre o popup, mesmo que ele esteja dentro de um grupo. */
 function focusHydrant(h){
   if(!h._marker) return;
+  if(h.kind === 'saude'){
+    map.setView([h.lat, h.lng], Math.max(map.getZoom(), 16), { animate: false });
+    h._marker.openPopup();
+    return;
+  }
   if(markersLayer.zoomToShowLayer){
     map.setView([h.lat, h.lng], Math.max(map.getZoom(), 17), { animate: false });
     markersLayer.zoomToShowLayer(h._marker, () => h._marker.openPopup());
@@ -610,6 +747,7 @@ const LIST_PAGE = 30;
 let listLimit = LIST_PAGE;
 
 let HIDRANTES = [];
+let SAUDE = [];
 let userMarker = null;
 let userLatLng = null;
 let pickMode = null; // null | 'user' (minha localização) | 'form' (posição do hidrante)
@@ -637,16 +775,20 @@ panelToggle.addEventListener('click', () => {
   panelEl.classList.toggle('collapsed');
 });
 
+const passaFiltro = h =>
+  (!filterBatalhao || h.batalhao === filterBatalhao) &&
+  (!filterCidade || h.cidade === filterCidade);
 function filteredHydrants(){
-  return HIDRANTES.filter(h =>
-    (!filterBatalhao || h.batalhao === filterBatalhao) &&
-    (!filterCidade || h.cidade === filterCidade)
-  );
+  return showLayer.h ? HIDRANTES.filter(passaFiltro) : [];
+}
+function filteredSaude(){
+  return showLayer.s ? SAUDE.filter(passaFiltro) : [];
 }
 
 function populateFilters(){
+  const todos = HIDRANTES.concat(SAUDE);
   // Filtro de batalhão só aparece quando há mais de um.
-  const batalhoes = [...new Set(HIDRANTES.map(h => h.batalhao).filter(Boolean))]
+  const batalhoes = [...new Set(todos.map(h => h.batalhao).filter(Boolean))]
     .sort((a, b) => a.localeCompare(b, 'pt-BR', { numeric: true }));
   batalhaoSel.style.display = batalhoes.length > 1 ? '' : 'none';
   batalhaoSel.innerHTML = '<option value="">Todos os batalhões</option>' +
@@ -654,7 +796,7 @@ function populateFilters(){
   if (filterBatalhao && !batalhoes.includes(filterBatalhao)) { filterBatalhao = ''; filterCidade = ''; }
   batalhaoSel.value = filterBatalhao;
 
-  const cidades = [...new Set(HIDRANTES.filter(h => !filterBatalhao || h.batalhao === filterBatalhao)
+  const cidades = [...new Set(todos.filter(h => !filterBatalhao || h.batalhao === filterBatalhao)
     .map(h => h.cidade).filter(Boolean))].sort();
   cidadeSel.innerHTML = '<option value="">Todas as cidades</option>' +
     cidades.map(c => `<option value="${esc(c)}">${esc(c)}</option>`).join('');
@@ -687,6 +829,27 @@ function renderMarkers(){
     `);
     h._marker = marker;
   });
+
+  saudeLayer.clearLayers();
+  filteredSaude().forEach(s => {
+    const tel = telLink(s.telefone);
+    const marker = L.marker([s.lat, s.lng], { icon: saudeIcon(s.h24), zIndexOffset: 500 }).addTo(saudeLayer);
+    marker.bindPopup(`
+      <b>${esc(s.nome)}</b><br>
+      <span class="popup-badge saude">${esc(s.tipo)}</span>
+      ${s.h24 === true ? '<span class="popup-badge h24">24 horas</span>'
+        : s.h24 === false ? '<span class="popup-badge no24">Não é 24 horas</span>' : ''}<br>
+      ${s.endereco ? `${esc(s.endereco)}<br>` : ''}
+      <b>Cidade/Bairro:</b> ${esc(s.cidade)}${s.bairro ? ' — ' + esc(s.bairro) : ''}<br>
+      ${s.telefone ? `<b>Telefone:</b> ${esc(s.telefone)}<br>` : ''}
+      ${s.acesso ? `<b>Acesso da ambulância:</b> ${esc(s.acesso)}<br>` : ''}
+      <div class="popup-actions">
+        <a class="popup-btn" href="${esc(routeLink(s.lat, s.lng))}" target="_blank" rel="noopener">🧭 Rota</a>
+        ${tel ? `<a class="popup-btn call" href="${esc(tel)}">📞 Ligar</a>` : ''}
+      </div>
+    `);
+    s._marker = marker;
+  });
 }
 
 /* Leaflet bloqueia a propagação de cliques do popup, então o botão é ligado ao abrir. */
@@ -702,24 +865,56 @@ map.on('popupopen', (e) => {
 });
 
 function renderList(){
-  let items = filteredHydrants();
+  const hid = filteredHydrants(), sau = filteredSaude();
+  let items = hid.concat(sau);
+  const nomeLista = showLayer.h && showLayer.s && SAUDE.length ? 'Hidrantes e saúde'
+    : showLayer.s && !showLayer.h ? 'Unidades de saúde' : 'Hidrantes';
   if(userLatLng){
     items = items.map(h => ({...h, dist: haversine(userLatLng.lat, userLatLng.lng, h.lat, h.lng)}));
     items.sort((a,b) => a.dist - b.dist);
-    panelTitle.textContent = 'Hidrantes mais próximos de você';
+    panelTitle.textContent = `${nomeLista} — mais próximos`;
   } else {
-    panelTitle.textContent = `Hidrantes (${items.length})`;
+    // Sem localização: unidades de saúde primeiro (são poucas), depois os hidrantes.
+    items = sau.concat(hid);
+    panelTitle.textContent = showLayer.h && showLayer.s && SAUDE.length
+      ? `Hidrantes (${hid.length}) · Saúde (${sau.length})` : `${nomeLista} (${items.length})`;
   }
 
   const scroll = listEl.scrollTop; // "Mostrar mais" redesenha a lista sem voltar ao topo
   listEl.innerHTML = '';
+  if(!showLayer.h && !showLayer.s){
+    listEl.innerHTML = '<div class="empty-msg">Ligue "Hidrantes" ou "Saúde" no canto do mapa.</div>';
+    return;
+  }
   if(items.length === 0){
-    listEl.innerHTML = '<div class="empty-msg">Nenhum hidrante encontrado para este filtro.</div>';
+    listEl.innerHTML = '<div class="empty-msg">Nada encontrado para este filtro.</div>';
     return;
   }
   items.slice(0, listLimit).forEach((h, rank) => {
-    const cls = h.condicao;
     const card = document.createElement('div');
+    if(h.kind === 'saude'){
+      card.className = 'hcard saude';
+      card.innerHTML = `
+        <div class="rank">${rank+1}</div>
+        <div class="info">
+          <div class="addr">🏥 ${esc(h.nome)}</div>
+          <div class="ref">${esc(h.tipo)}${h.endereco ? ' · ' + esc(h.endereco) : ''}</div>
+          <div class="meta">
+            ${h.h24 === true ? '<span class="h24-badge">24h</span>' : h.h24 === false ? '<span class="h24-badge no">Não é 24h</span>' : ''}
+            ${h.dist !== undefined ? `<span class="dist-badge">${fmtDist(h.dist)}</span>` : ''}
+            <span class="city-badge">${esc(h.cidade)}${h.bairro ? ' · ' + esc(h.bairro) : ''}</span>
+          </div>
+        </div>
+      `;
+      card.addEventListener('click', () => {
+        focusHydrant(h);
+        document.querySelectorAll('.hcard').forEach(c => c.classList.remove('active'));
+        card.classList.add('active');
+      });
+      listEl.appendChild(card);
+      return;
+    }
+    const cls = h.condicao;
     card.className = 'hcard';
     card.innerHTML = `
       <div class="rank">${rank+1}</div>
@@ -761,6 +956,7 @@ function refreshView(){
   listEl.scrollTop = 0;
   renderMarkers();
   renderList();
+  updateNearestStatus();
 }
 
 batalhaoSel.addEventListener('change', () => {
@@ -782,19 +978,28 @@ function setUserLocation(lat, lng, label){
   if(userMarker) map.removeLayer(userMarker);
   userMarker = L.marker([lat, lng], { icon: userIcon, zIndexOffset: 1000 })
     .addTo(map).bindPopup(label || 'Você está aqui');
-  const pool = filteredHydrants();
-  if(pool.length){
-    const nearest = pool.map(h => ({...h, dist: haversine(lat, lng, h.lat, h.lng)}))
-                         .sort((a,b) => a.dist - b.dist)[0];
-    statusBox.innerHTML = `Localização definida · Hidrante mais próximo: <b>${fmtDist(nearest.dist)}</b>`;
+  const byDist = list => list.slice(0).sort((a,b) => haversine(lat,lng,a.lat,a.lng) - haversine(lat,lng,b.lat,b.lng));
+  // Enquadra os hidrantes mais próximos; sem hidrantes visíveis, a unidade de saúde mais próxima.
+  const perto = filteredHydrants().length ? byDist(filteredHydrants()).slice(0,5) : byDist(filteredSaude()).slice(0,1);
+  if(perto.length){
     const bounds = L.latLngBounds([[lat, lng]]);
-    pool.slice(0).sort((a,b) => haversine(lat,lng,a.lat,a.lng) - haversine(lat,lng,b.lat,b.lng))
-      .slice(0,5).forEach(h => bounds.extend([h.lat, h.lng]));
+    perto.forEach(h => bounds.extend([h.lat, h.lng]));
     map.fitBounds(bounds, { padding: [60,60], maxZoom: 16 });
-  } else {
-    statusBox.textContent = 'Localização definida';
   }
+  updateNearestStatus();
   renderList();
+}
+
+/* "Hidrante mais próximo: 350 m · Saúde: 2.10 km" (só das camadas ligadas). */
+function updateNearestStatus(){
+  if(!userLatLng) return;
+  const { lat, lng } = userLatLng;
+  const nearest = list => list.reduce((m, h) => Math.min(m, haversine(lat, lng, h.lat, h.lng)), Infinity);
+  const partes = [];
+  const dh = nearest(filteredHydrants()), ds = nearest(filteredSaude());
+  if(isFinite(dh)) partes.push(`Hidrante mais próximo: <b>${fmtDist(dh)}</b>`);
+  if(isFinite(ds)) partes.push(`🏥 Saúde: <b>${fmtDist(ds)}</b>`);
+  statusBox.innerHTML = partes.length ? partes.join(' · ') : 'Localização definida';
 }
 
 function startPick(mode){
@@ -803,7 +1008,7 @@ function startPick(mode){
   document.getElementById('map').style.cursor = 'crosshair';
   banner.textContent = mode === 'form'
     ? 'Toque/clique no mapa no local exato do hidrante.'
-    : 'Toque/clique no mapa no local onde você está para calcular os hidrantes mais próximos.';
+    : 'Toque/clique no mapa no local onde você está para ver os pontos mais próximos.';
   banner.classList.add('show');
 }
 map.on('click', (e) => {
@@ -926,6 +1131,10 @@ async function fetchSheet(){
     else falhas.push(`${nome} (link da planilha ausente ou inválido)`);
   }
 
+  // Aba Saúde é opcional: se faltar ou falhar, o batalhão aparece só com os hidrantes.
+  const saudeP = Promise.allSettled(batalhoes.map(async (b) =>
+    rowsToSaude(await fetchCSV(sheetTabUrl(b.id, SAUDE_TAB))).map(s => ({ ...s, id: b.nome + ':' + s.id, batalhao: b.nome }))));
+
   const results = await Promise.allSettled(batalhoes.map(async (b) => {
     const rows = await fetchCSV(sheetTabUrl(b.id, BATALHAO_TAB));
     // Aba inexistente faz o Google devolver a primeira aba; o cabeçalho denuncia.
@@ -942,13 +1151,14 @@ async function fetchSheet(){
   });
   if(!all.length) throw new Error(falhas.length ? 'nenhum batalhão pôde ser lido: ' + falhas.join('; ') : 'nenhum hidrante cadastrado');
   loadWarning = falhas.length ? 'Planilhas de batalhão com problema: ' + falhas.join('; ') + '.' : '';
+  SAUDE = (await saudeP).flatMap(r => r.status === 'fulfilled' ? r.value : []);
   return all;
 }
 
 /* Última lista baixada fica no aparelho, para o mapa funcionar sem internet. */
 function saveCache(list){
   try {
-    localStorage.setItem(CACHE_KEY, JSON.stringify({ salvoEm: Date.now(), itens: list },
+    localStorage.setItem(CACHE_KEY, JSON.stringify({ salvoEm: Date.now(), itens: list, saude: SAUDE },
       (k, v) => k === '_marker' ? undefined : v));
   } catch (e) {}
 }
@@ -977,14 +1187,23 @@ async function loadData(){
       return;
     }
     HIDRANTES = cached.itens;
+    SAUDE = cached.saude || [];
     banner.textContent = 'Sem conexão — exibindo os dados salvos em ' +
       new Date(cached.salvoEm).toLocaleString('pt-BR') + '.';
     banner.classList.add('show');
   }
 
+  // Botões de camada só fazem sentido quando há unidades de saúde cadastradas.
+  if(SAUDE.length){
+    if(!layerToggle._map) layerToggle.addTo(map);
+  } else {
+    layerToggle.remove();
+    showLayer.h = true; // sem os botões, os hidrantes não podem ficar escondidos
+  }
   populateFilters();
   refreshView();
-  statusBox.textContent = `${HIDRANTES.length} hidrantes carregados`;
+  if(!userLatLng) statusBox.textContent = `${HIDRANTES.length} hidrantes` +
+    (SAUDE.length ? ` · ${SAUDE.length} unidades de saúde` : '') + ' carregados';
   locateBtn.disabled = false;
   pickBtn.disabled = false;
   if(firstLoad){
@@ -992,7 +1211,7 @@ async function loadData(){
     if(HIDRANTES.length){
       // Sem animação: se o GPS responder durante a animação, o foco na
       // posição do usuário seria descartado e o mapa ficaria afastado.
-      map.fitBounds(L.latLngBounds(HIDRANTES.map(h => [h.lat, h.lng])), { padding: [40,40], maxZoom: 14, animate: false });
+      map.fitBounds(L.latLngBounds(HIDRANTES.concat(SAUDE).map(h => [h.lat, h.lng])), { padding: [40,40], maxZoom: 14, animate: false });
     }
     locateUser();
   }

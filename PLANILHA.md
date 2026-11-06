@@ -16,22 +16,24 @@ PLANILHA PAI (administrador estadual)            ID configurado no app (SHEET_ID
  │ 17º BBM  │ Araranguá   │ https://docs...  │ Sim   │──> PLANILHA DO 17º BBM
  │ 4º BBM   │ Criciúma    │ https://docs...  │ Não   │      ├─ Instruções
  └──────────┴─────────────┴──────────────────┴───────┘      ├─ Hidrantes  ← o app lê esta aba
+                                                            ├─ Saúde      ← e esta (opcional)
                                                             └─ Cidades    (lista suspensa)
 ```
 
 Ordem de leitura do app:
 1. Abre a planilha pai, na aba **Batalhões**.
 2. Para cada linha com **Ativo** diferente de "Não", segue o **Link da planilha**.
-3. Lê a aba **Hidrantes** de cada batalhão. Os batalhões são lidos ao mesmo
-   tempo.
+3. Lê as abas **Hidrantes** e **Saúde** de cada batalhão. Os batalhões são
+   lidos ao mesmo tempo. A aba Saúde é opcional: sem ela, o batalhão aparece
+   só com os hidrantes.
 
 Se um batalhão tiver problema (link vazio, planilha não compartilhada ou aba
 Hidrantes ausente), os outros continuam aparecendo. O app mostra uma faixa
 amarela dizendo qual batalhão falhou e por quê.
 
 No app, o filtro **Batalhão** aparece automaticamente quando há mais de um
-batalhão com hidrantes. Os filtros Cidade e Bairro passam a mostrar só as
-opções do batalhão escolhido.
+batalhão com hidrantes. O filtro Cidade passa a mostrar só as cidades do
+batalhão escolhido.
 
 ## Modelos
 
@@ -92,12 +94,37 @@ Google**.
 | Data da Vistoria | não | Aparece como "Última vistoria" no app. |
 | Foto (link) | não | Link de foto no Google Drive (compartilhada por link). Aparece como "📷 Ver foto". |
 
+## Colunas da aba Saúde
+
+Hospitais, UPAs e prontos-atendimentos, **somente os que recebem ambulância**.
+No app aparecem como um quadrado azul com cruz (azul-claro quando não são 24
+horas). Os botões **🚒 Hidrantes** e **🏥 Saúde**, no canto do mapa, ligam e
+desligam cada camada. As duas começam ligadas.
+
+| Coluna | Obrigatória | Observação |
+|---|---|---|
+| Cidade | sim | Mesma lista da aba Cidades. |
+| Nome | sim | |
+| Tipo | sim | Hospital, UPA, Pronto Atendimento ou Pronto-socorro. Outros tipos (UBS, posto) não aparecem. |
+| Bairro, Endereço | não | |
+| Coordenadas | sim | De preferência na entrada da emergência. |
+| Telefone | não | Vira o botão "📞 Ligar". |
+| Atendimento 24h | não | Sim ou Não. |
+| Acesso da ambulância | não | Por onde a viatura entra. |
+| Observações | não | Uso interno, não aparece no app. |
+| Ativo | não | "Não" esconde a unidade sem apagar a linha. |
+| Código CNES | não | Identificação do Ministério da Saúde. |
+
+O popup de cada unidade tem o botão **🧭 Rota**, que abre a navegação do
+Google Maps até ela.
+
 ## Observações
 
 - Alterações nas planilhas aparecem no app na próxima vez que ele for aberto
   ou recarregado.
 - **Sem internet**, o app mostra a última lista baixada.
 - Os dados ficam visíveis a qualquer pessoa com o link. Não coloque nomes,
-  telefones ou informações restritas.
+  telefones pessoais ou informações restritas. Na aba Saúde, use só
+  telefones institucionais.
 - O histórico de alterações de cada planilha fica em **Arquivo → Histórico
   de versões**.
