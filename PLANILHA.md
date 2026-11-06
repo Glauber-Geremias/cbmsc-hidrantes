@@ -97,8 +97,9 @@ Google**.
 ## Colunas da aba Saúde
 
 Hospitais, UPAs e prontos-atendimentos, **somente os que recebem ambulância**.
-No app aparecem como um quadrado azul com cruz (azul-claro quando não são 24
-horas). Os botões **🚒 Hidrantes** e **🏥 Saúde**, no canto do mapa, ligam e
+No app aparecem como um quadrado com cruz: **azul** quando são 24 horas,
+**roxo** quando não são e cinza quando a coluna Atendimento 24h está em
+branco. Os botões **🚒 Hidrantes** e **🏥 Saúde**, no canto do mapa, ligam e
 desligam cada camada. As duas começam ligadas.
 
 | Coluna | Obrigatória | Observação |
