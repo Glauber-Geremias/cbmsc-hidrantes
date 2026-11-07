@@ -24,6 +24,7 @@
     --red-dark:#8e2c22;
     --green:#2e8b57;
     --amber:#d68910;
+    --alerta:#e67e22;
     --black-state:#1c1c1c;
     --gray:#7f8c8d;
     --blue:#1f6fb2;
@@ -148,6 +149,25 @@
   .popup-btn.red{background:var(--red);}
   .popup-btn.dark{background:#555;}
   button.popup-btn{border:none;cursor:pointer;font-family:inherit;margin:0;}
+  .popup-btn.alerta{background:var(--alerta);}
+
+  /* Alertas das unidades de saúde: laranja, para chamar atenção de longe */
+  .alertas-box{margin:6px 0 2px;border-radius:6px;background:#fff1e0;border-left:4px solid var(--alerta);padding:4px 6px;}
+  .alerta-item{display:flex;align-items:center;gap:6px;padding:3px 0;}
+  .alerta-item + .alerta-item{border-top:1px solid #f6d7b3;}
+  .alerta-item .txt{flex:1;min-width:0;line-height:1.3;}
+  .alerta-item .txt b{color:#a04a00;font-size:13px;}
+  .alerta-item .quando{display:block;font-size:10.5px;color:#7a5a3a;}
+  .alerta-del{border:1px solid #d9a066;background:#fff;color:#a04a00;border-radius:6px;font-size:11px;font-weight:700;
+    padding:4px 6px;cursor:pointer;font-family:inherit;white-space:nowrap;}
+  .alerta-badge{font-size:10.5px;font-weight:700;padding:2px 6px;border-radius:10px;background:var(--alerta);color:#fff;}
+  .hcluster.scluster.com-alerta{box-shadow:0 0 0 3px var(--alerta);}
+  .alerta-opcao{display:flex !important;align-items:center;gap:10px;font-size:15px !important;color:var(--text) !important;
+    font-weight:600;padding:10px;border:1px solid #ddd;border-radius:8px;margin:8px 0 0 !important;cursor:pointer;}
+  .alerta-opcao input{width:22px !important;height:22px;margin:0;flex-shrink:0;}
+  .alerta-opcao.ativo{opacity:.55;cursor:default;}
+  .alerta-opcao small{font-weight:400;font-size:11.5px;color:var(--muted);margin-left:auto;}
+  .btn-alerta{background:var(--alerta);color:#fff;}
 
   /* Liga/desliga camadas, no cabeçalho. Desligado = contorno apagado. */
   header button.layer-btn{border:2px solid #fff;}
@@ -393,6 +413,19 @@
       <button type="submit" class="btn btn-primary" id="fSaveBtn">Salvar</button>
     </div>
   </form>
+
+  <!-- Alerta de unidade de saúde (qualquer pessoa pode registrar) -->
+  <form class="modal-card" id="alertaForm" style="display:none;">
+    <h3>⚠️ Alerta</h3>
+    <p class="hint" id="alertaUnidade"></p>
+    <div id="alertaOpcoes"></div>
+    <p class="hint" style="margin-top:12px;">O alerta aparece para todos e some sozinho em 24 horas. Se o problema continuar no dia seguinte, registre de novo.</p>
+    <div class="form-error" id="alertaError"></div>
+    <div class="modal-actions">
+      <button type="button" class="btn btn-secondary" data-close>Cancelar</button>
+      <button type="submit" class="btn btn-alerta" id="alertaSalvar">Registrar alerta</button>
+    </div>
+  </form>
 </div>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -414,6 +447,19 @@ const SHEET_INDEX_TAB = 'Batalhões';  // aba da planilha pai com a lista de bat
 const BATALHAO_TAB = 'Hidrantes';     // aba lida em cada planilha de batalhão
 const SAUDE_TAB = 'Saúde';            // aba opcional com hospitais/UPAs do batalhão
 const CACHE_KEY = 'hidrantes-cache-v1';
+
+/* Alertas das unidades de saúde (ex.: "Sem Tomografia"), válidos por 24 horas.
+   ALERTAS_URL é o endereço do App da Web do Google (veja ALERTAS.md); vazio
+   desliga a função. As opções podem ser alteradas aqui à vontade. */
+const ALERTAS_URL = 'https://script.google.com/macros/s/AKfycby79LmVP_8UzHw6Qk7IFfDLHy03pBiaxOkwFCXeZh8eKQHKy2_xiew2zKmZF9IUuHro3A/exec';
+const ALERTA_OPCOES = ['Sem Raio X', 'Sem Tomografia'];
+const ALERTAS_CACHE_KEY = 'alertas-cache-v1';
+let ALERTAS = [];      // { id, chave, unidade, cidade, alerta, criado, expira } (ms)
+let relogioDelta = 0;  // relógio do Google − relógio do celular, para contar as 24 h certas
+try {
+  const c = JSON.parse(localStorage.getItem(ALERTAS_CACHE_KEY));
+  if (c && Array.isArray(c.alertas)) { ALERTAS = c.alertas; relogioDelta = c.delta || 0; }
+} catch (e) {}
 
 const USE_SUPABASE = !!(SUPABASE_URL && SUPABASE_ANON_KEY);
 const sb = (USE_SUPABASE && window.supabase)
@@ -678,11 +724,14 @@ const hydrantIcon = (cls) => L.divIcon({
 /* Unidade de saúde: quadrado com cruz branca. Azul = 24 horas; roxo = não é 24h;
    cinza = horário não informado na planilha. */
 const SAUDE_COR = h24 => h24 === true ? '#1f6fb2' : h24 === false ? '#7d3c98' : '#7f8c8d';
-const saudeIcon = (h24) => L.divIcon({
+/* Com alerta ativo: contorno laranja e um "!" laranja no canto. */
+const saudeIcon = (h24, alerta) => L.divIcon({
   className: '',
-  html: `<div style="width:26px;height:26px;border-radius:6px;background:${SAUDE_COR(h24)};
-          border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center;">
-          <svg viewBox="0 0 24 24" width="16" height="16"><path fill="#fff" d="M9 3h6v6h6v6h-6v6H9v-6H3V9h6z"/></svg></div>`,
+  html: `<div style="position:relative;width:26px;height:26px;border-radius:6px;background:${SAUDE_COR(h24)};
+          border:2px solid ${alerta ? 'var(--alerta)' : '#fff'};box-shadow:0 1px 4px rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center;">
+          <svg viewBox="0 0 24 24" width="16" height="16"><path fill="#fff" d="M9 3h6v6h6v6h-6v6H9v-6H3V9h6z"/></svg>
+          ${alerta ? `<span style="position:absolute;top:-9px;right:-9px;width:16px;height:16px;border-radius:50%;background:var(--alerta);
+            border:2px solid #fff;color:#fff;font:800 11px/16px Arial,sans-serif;text-align:center;">!</span>` : ''}</div>`,
   iconSize: [26,26],
   iconAnchor: [13,13],
   popupAnchor: [0,-12]
@@ -702,9 +751,11 @@ function clusterLayer(className){
     iconCreateFunction: (cluster) => {
       const n = cluster.getChildCount();
       const size = n < 10 ? 34 : n < 100 ? 40 : 48;
+      // Grupo com alguma unidade em alerta ganha contorno laranja.
+      const alerta = cluster.getAllChildMarkers().some(m => m.options.alerta);
       return L.divIcon({
         html: `<div style="width:${size - 8}px;height:${size - 8}px">${n}</div>`,
-        className,
+        className: className + (alerta ? ' com-alerta' : ''),
         iconSize: [size, size]
       });
     }
@@ -829,24 +880,32 @@ function renderMarkers(){
 
   saudeLayer.clearLayers();
   filteredSaude().forEach(s => {
-    const tel = telLink(s.telefone);
-    const marker = L.marker([s.lat, s.lng], { icon: saudeIcon(s.h24), zIndexOffset: 500 }).addTo(saudeLayer);
-    marker.bindPopup(`
-      <b>${esc(s.nome)}</b><br>
-      <span class="popup-badge saude">${esc(s.tipo)}</span>
-      ${s.h24 === true ? '<span class="popup-badge h24">24 horas</span>'
-        : s.h24 === false ? '<span class="popup-badge no24">Não é 24 horas</span>' : ''}<br>
-      ${s.endereco ? `${esc(s.endereco)}<br>` : ''}
-      <b>Cidade/Bairro:</b> ${esc(s.cidade)}${s.bairro ? ' — ' + esc(s.bairro) : ''}<br>
-      ${s.telefone ? `<b>Telefone:</b> ${esc(s.telefone)}<br>` : ''}
-      ${s.acesso ? `<b>Acesso da ambulância:</b> ${esc(s.acesso)}<br>` : ''}
-      <div class="popup-actions">
-        <a class="popup-btn" href="${esc(routeLink(s.lat, s.lng))}" target="_blank" rel="noopener">🧭 Rota</a>
-        ${tel ? `<a class="popup-btn call" href="${esc(tel)}">📞 Ligar</a>` : ''}
-      </div>
-    `);
+    const alerta = alertasDe(s).length > 0;
+    const marker = L.marker([s.lat, s.lng], { icon: saudeIcon(s.h24, alerta), zIndexOffset: alerta ? 800 : 500, alerta })
+      .addTo(saudeLayer);
+    marker.bindPopup(popupSaude(s));
     s._marker = marker;
   });
+}
+
+function popupSaude(s){
+  const tel = telLink(s.telefone);
+  return `
+    <b>${esc(s.nome)}</b><br>
+    <span class="popup-badge saude">${esc(s.tipo)}</span>
+    ${s.h24 === true ? '<span class="popup-badge h24">24 horas</span>'
+      : s.h24 === false ? '<span class="popup-badge no24">Não é 24 horas</span>' : ''}<br>
+    ${alertasHtml(s)}
+    ${s.endereco ? `${esc(s.endereco)}<br>` : ''}
+    <b>Cidade/Bairro:</b> ${esc(s.cidade)}${s.bairro ? ' — ' + esc(s.bairro) : ''}<br>
+    ${s.telefone ? `<b>Telefone:</b> ${esc(s.telefone)}<br>` : ''}
+    ${s.acesso ? `<b>Acesso da ambulância:</b> ${esc(s.acesso)}<br>` : ''}
+    <div class="popup-actions">
+      <a class="popup-btn" href="${esc(routeLink(s.lat, s.lng))}" target="_blank" rel="noopener">🧭 Rota</a>
+      ${tel ? `<a class="popup-btn call" href="${esc(tel)}">📞 Ligar</a>` : ''}
+      ${ALERTAS_URL ? `<button type="button" class="popup-btn alerta" data-alerta-novo="${esc(s.id)}">⚠️ Alerta</button>` : ''}
+    </div>
+  `;
 }
 
 /* Leaflet bloqueia a propagação de cliques do popup, então o botão é ligado ao abrir. */
@@ -897,6 +956,7 @@ function renderList(){
           <div class="addr">🏥 ${esc(h.nome)}</div>
           <div class="ref">${esc(h.tipo)}${h.endereco ? ' · ' + esc(h.endereco) : ''}</div>
           <div class="meta">
+            ${alertasDe(h).map(a => `<span class="alerta-badge">⚠️ ${esc(a.alerta)}</span>`).join('')}
             ${h.h24 === true ? '<span class="h24-badge">24h</span>' : h.h24 === false ? '<span class="h24-badge no">Não é 24h</span>' : ''}
             ${h.dist !== undefined ? `<span class="dist-badge">${fmtDist(h.dist)}</span>` : ''}
             <span class="city-badge">${esc(h.cidade)}${h.bairro ? ' · ' + esc(h.bairro) : ''}</span>
@@ -1232,7 +1292,7 @@ const loginError = document.getElementById('loginError');
 let editingId = null;
 
 function showModal(form){
-  [loginForm, hydrantForm].forEach(f => f.style.display = f === form ? 'block' : 'none');
+  [loginForm, hydrantForm, alertaForm].forEach(f => f.style.display = f === form ? 'block' : 'none');
   modal.classList.add('show');
 }
 function closeModal(){
@@ -1428,10 +1488,156 @@ if(sb){
   });
 }
 
+/* ---------- Alertas das unidades de saúde ----------
+   Qualquer pessoa registra ou apaga. Cada alerta vale 24 horas e depois some
+   sozinho (o app deixa de mostrar; o script do Google apaga a linha). */
+const alertaForm = document.getElementById('alertaForm');
+const alertaOpcoesEl = document.getElementById('alertaOpcoes');
+const alertaUnidadeEl = document.getElementById('alertaUnidade');
+const alertaError = document.getElementById('alertaError');
+const alertaSalvar = document.getElementById('alertaSalvar');
+let alertaUnidade = null;
+
+const chaveSaude = s => norm(s.cidade) + '|' + norm(s.nome);
+const agoraServidor = () => Date.now() + relogioDelta;
+
+function alertasDe(s){
+  if(!ALERTAS_URL) return [];
+  const c = chaveSaude(s), t = agoraServidor();
+  return ALERTAS.filter(a => a.chave === c && a.expira > t);
+}
+
+const fmtQuando = ms => new Date(ms).toLocaleString('pt-BR', { day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit' });
+function fmtRestante(ms){
+  const min = Math.max(1, Math.round(ms / 60000));
+  return min < 60 ? `${min} min` : `${Math.floor(min / 60)}h${String(min % 60).padStart(2, '0')}`;
+}
+
+function alertasHtml(s){
+  const lista = alertasDe(s);
+  if(!lista.length) return '';
+  const t = agoraServidor();
+  return `<div class="alertas-box">${lista.map(a => `
+    <div class="alerta-item">
+      <div class="txt">⚠️ <b>${esc(a.alerta)}</b>
+        <span class="quando">desde ${fmtQuando(a.criado)} · some em ${fmtRestante(a.expira - t)}</span></div>
+      <button type="button" class="alerta-del" data-alerta-del="${esc(a.id)}">Resolvido</button>
+    </div>`).join('')}</div>`;
+}
+
+/* Atualiza ícones, janelas (mesmo abertas) e lista sem redesenhar o mapa. */
+function aplicarAlertas(){
+  const t = agoraServidor();
+  const antes = ALERTAS.length;
+  ALERTAS = ALERTAS.filter(a => a.expira > t);
+  if(!HIDRANTES.length && !SAUDE.length) return; // dados ainda carregando
+  let mudouGrupo = false;
+  SAUDE.forEach(s => {
+    if(!s._marker) return;
+    const al = alertasDe(s).length > 0;
+    if(!!s._marker.options.alerta !== al){
+      s._marker.options.alerta = al;
+      s._marker.setIcon(saudeIcon(s.h24, al));
+      s._marker.setZIndexOffset(al ? 800 : 500);
+      mudouGrupo = true;
+    }
+    s._marker.setPopupContent(popupSaude(s));
+  });
+  if(mudouGrupo && saudeLayer.refreshClusters) saudeLayer.refreshClusters();
+  if(mudouGrupo || antes || ALERTAS.length) renderList();
+}
+
+function receberAlertas(d){
+  relogioDelta = d.agora - Date.now();
+  ALERTAS = Array.isArray(d.alertas) ? d.alertas : [];
+  try { localStorage.setItem(ALERTAS_CACHE_KEY, JSON.stringify({ delta: relogioDelta, alertas: ALERTAS })); } catch (e) {}
+  aplicarAlertas();
+}
+
+async function carregarAlertas(){
+  if(!ALERTAS_URL) return;
+  try {
+    const d = await (await fetch(ALERTAS_URL, { cache: 'no-store' })).json();
+    if(d.ok) receberAlertas(d);
+  } catch (e) { /* sem conexão: mantém os últimos recebidos */ }
+}
+
+/* Texto puro no corpo: o Google aceita sem a consulta prévia (CORS) que ele não responde. */
+async function enviarAlertas(corpo){
+  const d = await (await fetch(ALERTAS_URL, { method: 'POST', body: JSON.stringify(corpo) })).json();
+  if(!d.ok) throw new Error(d.erro || 'falha no servidor');
+  receberAlertas(d);
+}
+
+function abrirAlerta(s){
+  alertaUnidade = s;
+  alertaUnidadeEl.textContent = s.nome + (s.cidade ? ' — ' + s.cidade : '');
+  const ativos = new Set(alertasDe(s).map(a => a.alerta));
+  alertaOpcoesEl.innerHTML = ALERTA_OPCOES.map(o => ativos.has(o)
+    ? `<label class="alerta-opcao ativo"><input type="checkbox" checked disabled> ${esc(o)} <small>já em alerta</small></label>`
+    : `<label class="alerta-opcao"><input type="checkbox" value="${esc(o)}"> ${esc(o)}</label>`).join('');
+  showError(alertaError, '');
+  alertaSalvar.disabled = false;
+  alertaSalvar.textContent = 'Registrar alerta';
+  map.closePopup();
+  showModal(alertaForm);
+}
+
+alertaForm.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const s = alertaUnidade;
+  const escolhidos = [...alertaOpcoesEl.querySelectorAll('input:checked:not(:disabled)')].map(i => i.value);
+  if(!escolhidos.length) return showError(alertaError, 'Marque pelo menos uma opção.');
+  alertaSalvar.disabled = true;
+  alertaSalvar.textContent = 'Enviando…';
+  try {
+    await enviarAlertas({ acao: 'criar', chave: chaveSaude(s), unidade: s.nome, cidade: s.cidade, alertas: escolhidos });
+    closeModal();
+    if(s._marker && map.hasLayer(s._marker)) s._marker.openPopup();
+  } catch (err) {
+    showError(alertaError, 'Não foi possível registrar o alerta. Verifique a conexão e tente de novo.');
+    alertaSalvar.disabled = false;
+    alertaSalvar.textContent = 'Registrar alerta';
+  }
+});
+
+/* Botões dentro das janelas do mapa. Captura: o Leaflet bloqueia a propagação
+   dos cliques no popup, e o conteúdo é trocado quando os alertas mudam. */
+document.getElementById('map').addEventListener('click', async (e) => {
+  const novo = e.target.closest('[data-alerta-novo]');
+  if(novo){
+    const s = SAUDE.find(x => String(x.id) === novo.dataset.alertaNovo);
+    if(s) abrirAlerta(s);
+    return;
+  }
+  const del = e.target.closest('[data-alerta-del]');
+  if(!del || del.disabled) return;
+  const a = ALERTAS.find(x => x.id === del.dataset.alertaDel);
+  if(!a || !confirm(`Apagar o alerta "${a.alerta}" de ${a.unidade}?\n\nFaça isso só se o problema já foi resolvido.`)) return;
+  del.disabled = true;
+  del.textContent = 'Apagando…';
+  try {
+    await enviarAlertas({ acao: 'apagar', id: a.id });
+  } catch (err) {
+    alert('Não foi possível apagar o alerta. Verifique a conexão e tente de novo.');
+    del.disabled = false;
+    del.textContent = 'Resolvido';
+  }
+}, true);
+
+if(ALERTAS_URL){
+  carregarAlertas();
+  // Busca alertas novos a cada 2 min com o app na tela, e ao voltar para ele.
+  setInterval(() => { if(document.visibilityState === 'visible') carregarAlertas(); }, 2 * 60 * 1000);
+  document.addEventListener('visibilitychange', () => { if(document.visibilityState === 'visible') carregarAlertas(); });
+  // Atualiza o "some em …" e tira os vencidos mesmo sem internet.
+  setInterval(() => { if(ALERTAS.length) aplicarAlertas(); }, 60 * 1000);
+}
+
 /* ---------- PWA: instalação e service worker ---------- */
 /* Versão do app: mudar SÓ aqui a cada publicação. Ela aparece no cabeçalho e
    vai junto no endereço do service worker, o que renova o cache dos celulares. */
-const APP_VERSION = '3.2.4';
+const APP_VERSION = '3.3.1';
 document.getElementById('appVersion').textContent = 'v' + APP_VERSION;
 let reloadPending = false;
 if ('serviceWorker' in navigator && window.isSecureContext !== false) {
