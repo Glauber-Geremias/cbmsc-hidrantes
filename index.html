@@ -680,6 +680,13 @@ function esc(v){
 function safeUrl(u){
   return /^https?:\/\//i.test(u || '') ? u : '';
 }
+/* Foto no Google Drive: o link normal (drive.google.com/file/d/…) é aberto pelo
+   aplicativo do Drive no celular, que pede login mesmo com o arquivo público.
+   O endereço da imagem direta abre no navegador, sem conta. */
+function fotoUrl(u){
+  const m = String(u || '').match(/drive\.google\.com\/(?:file\/d\/|open\?id=|uc\?(?:export=\w+&)?id=)([\w-]{20,})/);
+  return m ? `https://lh3.googleusercontent.com/d/${m[1]}=w1600` : safeUrl(u);
+}
 function mapsLink(lat, lng){
   return `https://www.google.com/maps?q=${lat},${lng}`;
 }
@@ -871,7 +878,7 @@ function renderMarkers(){
       ${h.atualizado_em ? `<span class="popup-meta">Atualizado em ${new Date(h.atualizado_em).toLocaleDateString('pt-BR')}</span>` : ''}
       <div class="popup-actions">
         <a class="popup-btn red" href="${esc(routeLink(h.lat, h.lng))}" target="_blank" rel="noopener">🧭 Rota</a>
-        ${safeUrl(h.foto) ? `<a class="popup-btn dark" href="${esc(h.foto)}" target="_blank" rel="noopener">📷 Foto</a>` : ''}
+        ${fotoUrl(h.foto) ? `<a class="popup-btn dark" href="${esc(fotoUrl(h.foto))}" target="_blank" rel="noopener">📷 Foto</a>` : ''}
         ${canEdit(h) ? `<button type="button" class="popup-btn dark popup-edit" data-id="${esc(h.id)}">✏️ Editar</button>` : ''}
       </div>
     `);
@@ -1637,7 +1644,7 @@ if(ALERTAS_URL){
 /* ---------- PWA: instalação e service worker ---------- */
 /* Versão do app: mudar SÓ aqui a cada publicação. Ela aparece no cabeçalho e
    vai junto no endereço do service worker, o que renova o cache dos celulares. */
-const APP_VERSION = '3.3.1';
+const APP_VERSION = '3.3.2';
 document.getElementById('appVersion').textContent = 'v' + APP_VERSION;
 let reloadPending = false;
 if ('serviceWorker' in navigator && window.isSecureContext !== false) {
