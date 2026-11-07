@@ -61,6 +61,7 @@
     font-size:20px;flex-shrink:0;
   }
   header h1{font-size:15px;margin:0;line-height:1.2;}
+  header h1 .ver{font-size:10px;font-weight:600;opacity:.8;margin-left:4px;white-space:nowrap;}
   header p{font-size:11px;margin:0;opacity:.9;}
   header .status{font-size:11px;text-align:right;opacity:.95;line-height:1.35;}
   header button{
@@ -286,7 +287,7 @@
     <div class="brand">
       <div class="logo">🚒</div>
       <div>
-        <h1>Atalho Operacional</h1>
+        <h1>Atalho Operacional <span class="ver" id="appVersion"></span></h1>
         <p id="subtitle">Corpo de Bombeiros Militar de Santa Catarina</p>
       </div>
     </div>
@@ -1428,6 +1429,10 @@ if(sb){
 }
 
 /* ---------- PWA: instalação e service worker ---------- */
+/* Versão do app: mudar SÓ aqui a cada publicação. Ela aparece no cabeçalho e
+   vai junto no endereço do service worker, o que renova o cache dos celulares. */
+const APP_VERSION = '3.2.4';
+document.getElementById('appVersion').textContent = 'v' + APP_VERSION;
 let reloadPending = false;
 if ('serviceWorker' in navigator && window.isSecureContext !== false) {
   // Quando uma versão nova do service worker assume, recarrega para exibir o
@@ -1440,7 +1445,7 @@ if ('serviceWorker' in navigator && window.isSecureContext !== false) {
     if (!modal.classList.contains('show') && pickMode !== 'form') location.reload();
   });
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('./service-worker.js').catch(() => {});
+    navigator.serviceWorker.register('./service-worker.js?v=' + APP_VERSION).catch(() => {});
   });
 }
 

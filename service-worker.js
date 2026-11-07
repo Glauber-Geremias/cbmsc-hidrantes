@@ -1,4 +1,6 @@
-const CACHE_NAME = 'hidrantes-cbmsc-v9';
+// A versão vem do index.html (APP_VERSION), no endereço de registro deste arquivo.
+const APP_VERSION = new URL(self.location.href).searchParams.get('v') || 'sem-versao';
+const CACHE_NAME = 'atalho-operacional-' + APP_VERSION;
 const APP_SHELL = [
   './',
   './index.html',
