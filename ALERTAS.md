@@ -1,7 +1,7 @@
 # Alertas das unidades de saúde
 
 Na janela de um hospital ou UPA, o botão **⚠️ Alerta** registra uma anormalidade
-pontual (ex.: *Sem Raio X*, *Sem Tomografia*).
+pontual (*Sem Raio X*, *Sem Tomografia*, *Sem vaga de UTI*).
 
 - Qualquer pessoa com o app pode registrar um alerta ou apagá-lo pelo botão **Resolvido**.
 - Cada alerta vale **24 horas** e depois some sozinho. Se o problema continuar, registre de novo no dia seguinte.
@@ -30,6 +30,6 @@ A aba **Alertas** é criada sozinha no primeiro uso.
 
 ## Mudanças depois
 
-- **Opções da lista** (ex.: incluir "Sem UTI"): altere `ALERTA_OPCOES` no `index.html`. O script não precisa mudar.
+- **Opções da lista** (ex.: incluir "Sem Ressonância"): altere `ALERTA_OPCOES` no `index.html`. O script não precisa mudar.
 - **Mudou o script?** Use **Implantar → Gerenciar implantações → ✏️ Editar → Versão: Nova versão → Implantar**.
   Assim o endereço continua o mesmo. Uma "Nova implantação" geraria outro endereço.

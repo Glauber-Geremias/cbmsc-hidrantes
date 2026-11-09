@@ -308,7 +308,7 @@
       <div class="logo">🚒</div>
       <div>
         <h1>Atalho Operacional <span class="ver" id="appVersion"></span></h1>
-        <p id="subtitle">Corpo de Bombeiros Militar de Santa Catarina</p>
+        <p id="subtitle">Software de produção alternativa - uso livre</p>
       </div>
     </div>
     <div class="actions">
@@ -452,7 +452,7 @@ const CACHE_KEY = 'hidrantes-cache-v1';
    ALERTAS_URL é o endereço do App da Web do Google (veja ALERTAS.md); vazio
    desliga a função. As opções podem ser alteradas aqui à vontade. */
 const ALERTAS_URL = 'https://script.google.com/macros/s/AKfycby79LmVP_8UzHw6Qk7IFfDLHy03pBiaxOkwFCXeZh8eKQHKy2_xiew2zKmZF9IUuHro3A/exec';
-const ALERTA_OPCOES = ['Sem Raio X', 'Sem Tomografia'];
+const ALERTA_OPCOES = ['Sem Raio X', 'Sem Tomografia', 'Sem vaga de UTI'];
 const ALERTAS_CACHE_KEY = 'alertas-cache-v1';
 let ALERTAS = [];      // { id, chave, unidade, cidade, alerta, criado, expira } (ms)
 let relogioDelta = 0;  // relógio do Google − relógio do celular, para contar as 24 h certas
@@ -1644,7 +1644,7 @@ if(ALERTAS_URL){
 /* ---------- PWA: instalação e service worker ---------- */
 /* Versão do app: mudar SÓ aqui a cada publicação. Ela aparece no cabeçalho e
    vai junto no endereço do service worker, o que renova o cache dos celulares. */
-const APP_VERSION = '3.3.2';
+const APP_VERSION = '3.3.3';
 document.getElementById('appVersion').textContent = 'v' + APP_VERSION;
 let reloadPending = false;
 if ('serviceWorker' in navigator && window.isSecureContext !== false) {
